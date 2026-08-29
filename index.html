@@ -78,6 +78,9 @@
   <h1>Bidik.<br>Lalu <span>susun</span>.</h1>
   <p id="gatetext">Bentuk kotak pakai dua tangan, lepas, dan kamera menghitung mundur.
      Fotonya pecah jadi sembilan keping yang kamu susun ulang lewat udara.</p>
+  <select id="camSelect" style="display:none;font:inherit;font-size:12px;letter-spacing:.05em;
+    color:var(--emulsion);background:var(--film);border:1px solid #2A3040;border-radius:2px;
+    padding:10px 12px;margin-bottom:16px;width:100%;max-width:38ch"></select><br>
   <button id="start">Nyalakan kamera</button>
   <small>Kamera diproses sepenuhnya di perangkat ini. Tidak ada video yang dikirim ke mana pun.<br>
   Butuh koneksi saat pertama dibuka untuk mengunduh model deteksi tangan.</small>
@@ -91,6 +94,7 @@ import { HandLandmarker, FilesetResolver }
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 const recEl = document.getElementById("rec"), hintEl = document.getElementById("hint");
 const gate = document.getElementById("gate"), gateText = document.getElementById("gatetext");
+const camSelect = document.getElementById("camSelect");
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true;
 
@@ -137,12 +141,16 @@ document.getElementById("start").addEventListener("click", boot);
 async function boot(){
   try{
     gateText.textContent = "Meminta izin kamera…";
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ width:{ideal:1280}, height:{ideal:720}, facingMode:"user" }, audio:false });
-    video.srcObject = stream;
-    await video.play();
-    W = video.videoWidth || 1280; H = video.videoHeight || 720;
-    cv.width = W; cv.height = H;
+    await startStream();  // izin dulu, supaya label perangkat kamera bisa dibaca
+
+    const devices = (await navigator.mediaDevices.enumerateDevices())
+      .filter(dv => dv.kind === "videoinput");
+    if (devices.length > 1){
+      camSelect.innerHTML = devices.map((dv,i) =>
+        `<option value="${esc(dv.deviceId)}">${esc(dv.label || "Kamera " + (i+1))}</option>`).join("");
+      camSelect.style.display = "block";
+      camSelect.onchange = () => startStream(camSelect.value);
+    }
 
     gateText.textContent = "Mengunduh model deteksi tangan…";
     const files = await FilesetResolver.forVisionTasks(
@@ -164,6 +172,23 @@ async function boot(){
       "<br><br>Halaman ini harus dibuka lewat https:// atau localhost agar browser mengizinkan kamera. " +
       "Membuka file langsung dari folder (file://) akan diblokir.";
   }
+}
+
+// Menyalakan kamera tertentu (atau default kalau deviceId kosong).
+// Dipanggil ulang saat pengguna ganti pilihan di dropdown, termasuk saat
+// aplikasi sudah berjalan — supaya guru bisa pindah kamera tanpa reload.
+async function startStream(deviceId){
+  const old = video.srcObject;
+  if (old) old.getTracks().forEach(t => t.stop());
+
+  const constraints = deviceId
+    ? { video:{ deviceId:{ exact:deviceId }, width:{ideal:1920}, height:{ideal:1080} }, audio:false }
+    : { video:{ width:{ideal:1280}, height:{ideal:720}, facingMode:"user" }, audio:false };
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  await video.play();
+  W = video.videoWidth || 1280; H = video.videoHeight || 720;
+  cv.width = W; cv.height = H;
 }
 const esc = s => s.replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 
