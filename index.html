@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bidik &amp; Susun — kamera gestur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#080A0F;
+    --film:#12161F;
+    --safelight:#FF7A1A;   /* lampu kamar gelap */
+    --emulsion:#F2EFE6;    /* teks utama */
+    --grain:#6C7686;       /* teks sekunder */
+    --fix:#39D98A;         /* selesai / benar */
+    --hold:#E5387B;        /* ubin yang lagi dipegang */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--ink);color:var(--emulsion);
+    font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{position:fixed;inset:0;display:grid;place-items:center}
+  canvas{max-width:100%;max-height:100%;display:block;
+    background:var(--film);border-radius:2px}
+
+  /* ---- HUD ---- */
+  .hud{position:fixed;pointer-events:none;letter-spacing:.08em;font-size:12px}
+  #status{top:0;left:0;right:0;padding:16px 18px;display:flex;gap:14px;
+    align-items:baseline;justify-content:space-between;
+    background:linear-gradient(180deg,rgba(8,10,15,.85),transparent)}
+  #rec{color:var(--safelight);text-transform:uppercase}
+  #rec::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
+    background:var(--safelight);margin-right:8px;vertical-align:middle;
+    animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.15}}
+  #hint{color:var(--grain);text-align:right;line-height:1.6;max-width:46ch}
+  #hint b{color:var(--emulsion);font-weight:700}
+  #keys{bottom:0;left:0;right:0;padding:14px 18px;color:var(--grain);
+    display:flex;gap:18px;flex-wrap:wrap;justify-content:center;
+    background:linear-gradient(0deg,rgba(8,10,15,.85),transparent)}
+  #keys kbd{color:var(--emulsion);border:1px solid #2A3040;border-radius:3px;
+    padding:1px 6px;margin-right:6px}
+
+  /* ---- layar pembuka / error ---- */
+  #gate{position:fixed;inset:0;background:var(--ink);display:grid;place-items:center;
+    text-align:center;padding:32px;z-index:10}
+  #gate .plate{max-width:52ch}
+  #gate h1{font-size:clamp(28px,6vw,52px);font-weight:700;line-height:1.05;
+    letter-spacing:-.02em;margin-bottom:6px}
+  #gate h1 span{color:var(--safelight)}
+  #gate p{color:var(--grain);font-size:13px;line-height:1.8;margin-bottom:26px}
+  #gate button{font:inherit;font-weight:700;font-size:13px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink);background:var(--safelight);
+    border:0;border-radius:2px;padding:14px 26px;cursor:pointer}
+  #gate button:hover{filter:brightness(1.12)}
+  #gate button:focus-visible{outline:2px solid var(--emulsion);outline-offset:3px}
+  #gate small{display:block;margin-top:22px;color:#3E4757;font-size:11px;line-height:1.7}
+  .err{color:var(--hold)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div class="hud" id="status"><span id="rec">memuat</span><span id="hint"></span></div>
+<div class="hud" id="keys">
+  <span><kbd>C</kbd>jepret manual</span>
+  <span><kbd>S</kbd>simpan</span>
+  <span><kbd>R</kbd>ulang</span>
+  <span><kbd>D</kbd>tampilkan titik tangan</span>
+  <span>mouse juga jalan</span>
+</div>
+
+<div id="gate"><div class="plate">
+  <h1>Bidik.<br>Lalu <span>susun</span>.</h1>
+  <p id="gatetext">Bentuk kotak pakai dua tangan, lepas, dan kamera menghitung mundur.
+     Fotonya pecah jadi sembilan keping yang kamu susun ulang lewat udara.</p>
+  <button id="start">Nyalakan kamera</button>
+  <small>Kamera diproses sepenuhnya di perangkat ini. Tidak ada video yang dikirim ke mana pun.<br>
+  Butuh koneksi saat pertama dibuka untuk mengunduh model deteksi tangan.</small>
+</div></div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+/* ══ elemen & state ══════════════════════════════════════ */
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const recEl = document.getElementById("rec"), hintEl = document.getElementById("hint");
+const gate = document.getElementById("gate"), gateText = document.getElementById("gatetext");
+const video = document.createElement("video");
+video.playsInline = true; video.muted = true;
+
+let landmarker = null, W = 1280, H = 720, lastVideoTime = -1;
+let showDots = false;
+
+const S = { LOAD:"LOAD", AIM:"AIM", COUNT:"COUNT", SHOT:"SHOT", PUZZLE:"PUZZLE", DONE:"DONE" };
+let state = S.LOAD;
+
+let frameRect = null;      // kotak bidik yang sedang terlihat
+let armedRect = null;      // kotak terakhir yang valid, dipakai saat jepret
+let armedFrames = 0, lostFrames = 0;
+let countStart = 0;
+let photo = null;          // canvas hasil crop
+let order = [], drag = null, pinchWasDown = false, cursor = null, trail = [];
+let palmFrames = 0, savedFlash = 0, saveArmed = true, shotStart = 0;
+
+const N = 3;               // 3x3
+
+/* ══ util geometri ═══════════════════════════════════════ */
+const d = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const handSize = L => d(L[0], L[9]) || 1e-6;
+const ext = (L,tip,pip) => d(L[tip],L[0]) > d(L[pip],L[0]) * 1.02;
+
+function isFrameHand(L){
+  return ext(L,4,3) && ext(L,8,6) && !ext(L,12,10) && !ext(L,16,14) && !ext(L,20,18);
+}
+function isOpenPalm(L){
+  return ext(L,4,3) && ext(L,8,6) && ext(L,12,10) && ext(L,16,14) && ext(L,20,18);
+}
+/* Pinch pakai dua ambang (histeresis): nyala saat rapat, baru mati saat renggang.
+   Satu ambang tunggal bikin status kedip-kedip di sekitar batas. */
+const PINCH_ON = 0.26, PINCH_OFF = 0.40;
+let pinchState = false;
+const pinchRatio = L => d(L[4],L[8]) / handSize(L);
+
+// landmark → koordinat kanvas (video digambar mirror, jadi x dibalik)
+const px = p => ({ x:(1-p.x)*W, y:p.y*H });
+const cornerOf = L => px({ x:(L[2].x+L[5].x)/2, y:(L[2].y+L[5].y)/2 });
+
+/* ══ boot ════════════════════════════════════════════════ */
+document.getElementById("start").addEventListener("click", boot);
+
+async function boot(){
+  try{
+    gateText.textContent = "Meminta izin kamera…";
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ideal:1280}, height:{ideal:720}, facingMode:"user" }, audio:false });
+    video.srcObject = stream;
+    await video.play();
+    W = video.videoWidth || 1280; H = video.videoHeight || 720;
+    cv.width = W; cv.height = H;
+
+    gateText.textContent = "Mengunduh model deteksi tangan…";
+    const files = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    landmarker = await HandLandmarker.createFromOptions(files, {
+      baseOptions:{
+        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate:"GPU" },
+      numHands:2, runningMode:"VIDEO",
+      minHandDetectionConfidence:0.5, minTrackingConfidence:0.5
+    });
+
+    gate.style.display = "none";
+    state = S.AIM;
+    requestAnimationFrame(loop);
+  }catch(e){
+    gateText.innerHTML = '<span class="err">Kamera atau model gagal dimuat.</span><br>' +
+      esc(e.message || String(e)) +
+      "<br><br>Halaman ini harus dibuka lewat https:// atau localhost agar browser mengizinkan kamera. " +
+      "Membuka file langsung dari folder (file://) akan diblokir.";
+  }
+}
+const esc = s => s.replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+/* ══ loop utama ══════════════════════════════════════════ */
+function loop(){
+  requestAnimationFrame(loop);
+  if (video.readyState < 2) return;
+
+  let hands = [];
+  if (video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+    hands = (landmarker.detectForVideo(video, performance.now()).landmarks) || [];
+    lastHands = hands;
+  } else hands = lastHands;
+
+  ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
+  ctx.drawImage(video,0,0,W,H); ctx.restore();
+
+  if (state === S.AIM || state === S.COUNT){ ctx.fillStyle="rgba(8,10,15,.28)"; ctx.fillRect(0,0,W,H); }
+
+  if (state === S.AIM)   aim(hands);
+  if (state === S.COUNT) count();
+  if (state === S.SHOT)  shot();
+  if (state === S.PUZZLE || state === S.DONE) puzzle(hands);
+
+  if (showDots) drawDots(hands);
+  if (savedFlash > 0){
+    ctx.fillStyle = `rgba(242,239,230,${savedFlash})`; ctx.fillRect(0,0,W,H);
+    savedFlash -= 0.06;
+  }
+}
+let lastHands = [];
+
+/* ══ tahap 1 — membidik ══════════════════════════════════ */
+function aim(hands){
+  const corners = hands.filter(isFrameHand).map(cornerOf);
+  frameRect = null;
+
+  if (corners.length >= 2){
+    const [a,b] = corners;
+    const r = { x:Math.min(a.x,b.x), y:Math.min(a.y,b.y),
+                w:Math.abs(a.x-b.x), h:Math.abs(a.y-b.y) };
+    if (r.w > W*0.16 && r.h > H*0.16){ frameRect = r; armedRect = r; armedFrames++; lostFrames = 0; }
+  } else if (armedFrames > 8){
+    if (++lostFrames > 6){ state = S.COUNT; countStart = performance.now(); armedFrames = 0; }
+  } else { armedFrames = Math.max(0, armedFrames-1); }
+
+  if (frameRect) brackets(frameRect, armedFrames > 8 ? "var(--fix)" : "var(--safelight)");
+
+  setHud(frameRect
+    ? (armedFrames > 8 ? "terkunci" : "menahan")
+    : "membidik",
+    frameRect
+      ? "Turunkan tangan untuk memotret."
+      : "Bentuk huruf <b>L</b> dengan kedua tangan — siku jempol-telunjuk jadi dua sudut kotak.");
+}
+
+function brackets(r, color){
+  const len = Math.min(r.w, r.h) * 0.22;
+  ctx.strokeStyle = color === "var(--fix)" ? "#39D98A" : "#FF7A1A";
+  ctx.lineWidth = 4; ctx.lineCap = "square";
+  const pts = [[r.x,r.y,1,1],[r.x+r.w,r.y,-1,1],[r.x,r.y+r.h,1,-1],[r.x+r.w,r.y+r.h,-1,-1]];
+  for (const [x,y,sx,sy] of pts){
+    ctx.beginPath();
+    ctx.moveTo(x + sx*len, y); ctx.lineTo(x,y); ctx.lineTo(x, y + sy*len);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(255,122,26,.25)"; ctx.lineWidth = 1;
+  ctx.strokeRect(r.x, r.y, r.w, r.h);
+}
+
+/* ══ tahap 2 — hitung mundur ═════════════════════════════ */
+function count(){
+  const left = 3 - (performance.now() - countStart)/1000;
+  if (left <= 0){ capture(); return; }
+  if (armedRect) brackets(armedRect, "var(--fix)");
+
+  const n = Math.ceil(left), t = 1 - (n - left);   // 0→1 tiap detik
+  ctx.save();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `700 ${Math.round(H*0.34)}px "JetBrains Mono",monospace`;
+  ctx.fillStyle = `rgba(255,122,26,${0.25 + 0.6*(1-t)})`;
+  ctx.fillText(n, W/2, H/2);
+  ctx.restore();
+  setHud("hitung mundur", "Tahan pose.");
+}
+
+function capture(){
+  const r = armedRect;
+  const side = Math.min(r.w, r.h);                        // dipotong jadi bujur sangkar
+  const cx = r.x + r.w/2, cy = r.y + r.h/2;
+  const sx = W - (cx + side/2), sy = cy - side/2;         // balik ke koordinat video asli
+
+  photo = document.createElement("canvas");
+  photo.width = photo.height = 900;
+  const pc = photo.getContext("2d");
+  pc.translate(900,0); pc.scale(-1,1);
+  pc.drawImage(video, sx, sy, side, side, 0, 0, 900, 900);
+
+  savedFlash = 1;
+  shotStart = performance.now();
+  state = S.SHOT; drag = null; palmFrames = 0; saveArmed = true;
+}
+
+/* Jeda sesaat: tampilkan hasilnya utuh sebelum pecah jadi keping,
+   supaya terasa ada momen "terjepret". */
+function shot(){
+  const b = board();
+  ctx.fillStyle = "rgba(8,10,15,.62)"; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(photo, b.x, b.y, b.side, b.side);
+  ctx.strokeStyle = "#FF7A1A"; ctx.lineWidth = 3;
+  ctx.strokeRect(b.x-6, b.y-6, b.side+12, b.side+12);
+  setHud("terjepret", "Bersiap menyusun…");
+  if (performance.now() - shotStart > 1400){ order = shuffled(); state = S.PUZZLE; }
+}
+
+function shuffled(){
+  let a;
+  do { a = [...Array(N*N).keys()].sort(() => Math.random()-0.5); }
+  while (a.every((v,i) => v === i));
+  return a;
+}
+
+/* ══ tahap 3 — menyusun ══════════════════════════════════ */
+function board(){
+  const side = Math.min(W,H) * 0.66;
+  return { x:(W-side)/2, y:(H-side)/2, side, cell:side/N };
+}
+function slotAt(p){
+  const b = board();
+  const c = Math.floor((p.x - b.x)/b.cell), r = Math.floor((p.y - b.y)/b.cell);
+  return (c>=0 && c<N && r>=0 && r<N) ? r*N + c : -1;
+}
+/* Untuk melepas keping: jangan menuntut tepat di dalam kotak — ambil yang terdekat. */
+function nearestSlot(p){
+  const b = board();
+  const cl = v => Math.max(0, Math.min(N-1, v));
+  const c = cl(Math.floor((p.x - b.x)/b.cell)), r = cl(Math.floor((p.y - b.y)/b.cell));
+  return r*N + c;
+}
+
+function puzzle(hands){
+  const b = board();
+  ctx.fillStyle = "rgba(8,10,15,.62)"; ctx.fillRect(0,0,W,H);
+
+  // Kursor selalu ujung telunjuk — titik ini tidak bergeser saat cubitan dilepas,
+  // beda dengan titik tengah jempol-telunjuk yang melorot mengikuti jempol.
+  let best = Infinity, hand = null;
+  for (const L of hands){ const r = pinchRatio(L); if (r < best){ best = r; hand = L; } }
+  if (hand && !mouseDown) cursor = px(hand[8]);
+  if (best < PINCH_ON) pinchState = true;
+  else if (best > PINCH_OFF || !hand) pinchState = false;
+  const down = pinchState || mouseDown;
+
+  // Simpan jejak beberapa frame; saat melepas, pakai posisi sesaat sebelumnya
+  // supaya gerakan refleks membuka jari tidak menggeser titik jatuh.
+  if (cursor){ trail.push({ x:cursor.x, y:cursor.y }); if (trail.length > 5) trail.shift(); }
+
+  if (down && !pinchWasDown){ const s = slotAt(cursor); if (s >= 0) drag = s; }
+  if (!down && pinchWasDown && drag !== null){
+    const s = nearestSlot(trail[0] || cursor);
+    if (s !== drag){ [order[s], order[drag]] = [order[drag], order[s]]; }
+    drag = null;
+    if (order.every((v,i) => v === i)) state = S.DONE;
+  }
+  pinchWasDown = down;
+
+  const src = photo.width / N;
+  for (let s = 0; s < N*N; s++){
+    if (s === drag) continue;
+    tile(order[s], b.x + (s%N)*b.cell, b.y + Math.floor(s/N)*b.cell, b.cell, src,
+         state === S.DONE ? null : (order[s] === s ? "#39D98A" : "rgba(242,239,230,.22)"));
+  }
+  if (drag !== null && cursor){
+    tile(order[drag], cursor.x - b.cell/2, cursor.y - b.cell/2, b.cell, src, "#E5387B", true);
+  }
+  if (cursor){
+    ctx.beginPath(); ctx.arc(cursor.x, cursor.y, down ? 9 : 15, 0, 7);
+    ctx.strokeStyle = down ? "#E5387B" : "rgba(242,239,230,.55)"; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+
+  if (state === S.DONE){
+    // telapak terbuka ditahan → simpan
+    if (hands.some(isOpenPalm)) palmFrames = Math.min(60, palmFrames+1);
+    else { palmFrames = Math.max(0, palmFrames-3); if (palmFrames === 0) saveArmed = true; }
+    const p = saveArmed ? Math.min(1, palmFrames/45) : 0;
+    if (saveArmed && p >= 1){ save(); saveArmed = false; }
+
+    ctx.save();
+    ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 3;
+    ctx.strokeRect(b.x-6, b.y-6, b.side+12, b.side+12);
+    if (p > 0){
+      ctx.strokeStyle = "#FF7A1A"; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(b.x-6, b.y+b.side+10);
+      ctx.lineTo(b.x-6 + (b.side+12)*p, b.y+b.side+10); ctx.stroke();
+    }
+    ctx.restore();
+    setHud(saveArmed ? "tersusun" : "tersimpan",
+      saveArmed ? "Buka telapak tangan dan tahan untuk menyimpan."
+                : "Turunkan tangan. Tekan <b>R</b> untuk memotret lagi.");
+  } else {
+    setHud("menyusun", "Cubit jempol dan telunjuk untuk menarik keping, lepas untuk menukar.");
+  }
+}
+
+function tile(idx, x, y, size, src, edge, lift){
+  const sx = (idx % N) * src, sy = Math.floor(idx / N) * src;
+  if (lift){ ctx.save(); ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 28; ctx.shadowOffsetY = 10; }
+  ctx.drawImage(photo, sx, sy, src, src, x+1.5, y+1.5, size-3, size-3);
+  if (lift) ctx.restore();
+  if (edge){ ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.strokeRect(x+1.5, y+1.5, size-3, size-3); }
+}
+
+function save(){
+  const out = document.createElement("canvas");
+  out.width = out.height = photo.width;
+  const oc = out.getContext("2d");
+  const src = photo.width / N;
+  for (let s = 0; s < N*N; s++){
+    const i = order[s];
+    oc.drawImage(photo, (i%N)*src, Math.floor(i/N)*src, src, src,
+                        (s%N)*src, Math.floor(s/N)*src, src, src);
+  }
+  const a = document.createElement("a");
+  a.download = `bidik-${Date.now()}.png`;
+  a.href = out.toDataURL("image/png");
+  a.click();
+  savedFlash = 1;
+  setHud("tersimpan", "Tekan <b>R</b> untuk memotret lagi.");
+}
+
+/* ══ HUD, titik tangan, kontrol cadangan ═════════════════ */
+function setHud(status, hint){ recEl.textContent = status; hintEl.innerHTML = hint; }
+
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+               [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawDots(hands){
+  for (const L of hands){
+    ctx.strokeStyle = "rgba(255,122,26,.55)"; ctx.lineWidth = 2;
+    for (const [a,b] of BONES){
+      const p = px(L[a]), q = px(L[b]);
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
+    }
+    ctx.fillStyle = "#F2EFE6";
+    for (const l of L){ const p = px(l); ctx.beginPath(); ctx.arc(p.x,p.y,3.5,0,7); ctx.fill(); }
+  }
+}
+
+let mouseDown = false;
+const toCanvas = e => { const r = cv.getBoundingClientRect();
+  return { x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height }; };
+cv.addEventListener("pointerdown", e => { mouseDown = true; cursor = toCanvas(e); });
+cv.addEventListener("pointermove", e => { if (state===S.PUZZLE||state===S.DONE) cursor = toCanvas(e); });
+window.addEventListener("pointerup", () => { mouseDown = false; });
+
+addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  if (k === "d") showDots = !showDots;
+  if (k === "c" && state === S.AIM){
+    armedRect = armedRect || { x:W*0.25, y:H*0.12, w:W*0.5, h:H*0.76 };
+    state = S.COUNT; countStart = performance.now();
+  }
+  if (k === "s" && photo) save();
+  if (k === "r"){ state = S.AIM; photo = null; drag = null; trail = [];
+                  armedFrames = 0; lostFrames = 0; palmFrames = 0;
+                  saveArmed = true; pinchState = false; }
+});
+</script>
+</body>
+</html>
