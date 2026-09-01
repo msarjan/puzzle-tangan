@@ -63,6 +63,10 @@
   #gate button:hover{filter:brightness(1.12)}
   #gate button:focus-visible{outline:2px solid var(--emulsion);outline-offset:3px}
   #gate small{display:block;margin-top:20px;color:#3E4757;font-size:11px;line-height:1.7}
+  #tautanIG{display:block;margin-top:18px;color:var(--grain);font-size:11px;
+    letter-spacing:.06em;text-decoration:none;border-bottom:1px solid #2A3040;
+    padding-bottom:3px;width:fit-content;margin-left:auto;margin-right:auto}
+  #tautanIG:hover{color:var(--safelight);border-color:var(--safelight)}
   .err{color:#E5387B}
   @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
@@ -83,8 +87,9 @@
 
 <div id="gate"><div class="plate">
   <h1>Bidik.<br>Lalu <span>susun</span>.</h1>
-  <p id="gatetext">Bentuk kotak pakai dua tangan, lepas, dan kamera menghitung mundur.
-     Fotonya pecah jadi keping yang disusun ulang lewat udara — bisa banyak tangan sekaligus.</p>
+  <p id="gatetext">Cubit jempol dan telunjuk di kedua tangan, tahan sebentar, dan kamera
+     menghitung mundur. Fotonya pecah jadi keping yang disusun ulang lewat udara —
+     bisa banyak tangan sekaligus.</p>
 
   <div class="baris">
     <div class="bidang"><label>Kamera</label>
@@ -111,6 +116,7 @@
   </div>
 
   <button id="start">Nyalakan kamera</button>
+  <a id="tautanIG" href="#" target="_blank" rel="noopener" style="display:none"></a>
   <small>Kamera diproses sepenuhnya di perangkat ini. Tidak ada video yang dikirim ke mana pun.<br>
   Butuh koneksi saat pertama dibuka untuk mengunduh model deteksi.</small>
 </div></div>
@@ -135,11 +141,12 @@ const K = {
 
   JEJAK:           5,      // titik jatuh diambil dari sekian frame lalu
 
-  // membidik
+  // membidik — dua tangan mencubit, tiap cubitan jadi satu sudut kotak
   MIN_KOTAK:       0.16,   // × lebar/tinggi. Turunkan (0.08) untuk pemakaian jarak jauh.
-  KUNCI_FRAME:     8,      // lama pose L harus stabil sebelum dianggap terkunci
-  LEPAS_FRAME:     6,      // lama pose hilang sebelum hitung mundur mulai
-  HITUNG_MUNDUR:   3,      // detik
+  TAHAN_BIDIK:     90,     // frame kedua cubitan harus ditahan (±1,5 detik di 60fps)
+  LUNTUR_BIDIK:    4,      // pengurangan per frame saat cubitan lepas —
+                           //   lebih besar = lebih galak, kedipan sesaat langsung membatalkan
+  HITUNG_MUNDUR:   3,      // detik, jeda untuk menurunkan tangan sebelum jepret
   JEDA_JEPRET:     1400,   // ms menampilkan foto utuh sebelum pecah jadi keping
 
   // menyimpan
@@ -154,8 +161,19 @@ const K = {
   MARGIN_X:        0.94,   // porsi lebar layar yang boleh dipakai papan
   MARGIN_Y:        0.86,
   SELA:            22,     // jarak antar papan, piksel
-  PX_PAPAN:        900     // resolusi foto tiap papan
+  PX_PAPAN:        900,    // resolusi foto tiap papan
+
+  // tampilan saat menyusun — keping tembus pandang, kamera masih terlihat di latar
+  ALPHA_PAPAN:     0.85,   // 1 = keping pekat, 0.7 = latar makin dominan
+  ALPHA_ANGKAT:    1.00,   // keping yang sedang diangkat dibuat pekat supaya menonjol
+  REDUP_PUZZLE:    0.22    // seberapa gelap video di belakang papan. Naikkan kalau
+                           //   latar terlalu ramai sampai keping susah dilihat.
 };
+
+/* Tautan ke postingan Instagram. Kosongkan ("") untuk menyembunyikan.
+   Isi dengan URL lengkap, misal "https://www.instagram.com/p/XXXXXXXXX/" */
+const TAUTAN_IG = "";
+const TEKS_IG   = "Sudah coba? Ceritakan di postingan ini →";
 
 /* warna penunjuk — tiap tangan dapat warna berbeda supaya jelas siapa pegang apa */
 const WARNA = ["#E5387B", "#39D98A", "#4EA8FF", "#FFC53D", "#B36BFF", "#FF7A1A"];
@@ -195,16 +213,12 @@ const handSize = L => d(L[0], L[9]) || 1e-6;
 const ext = (L,tip,pip) => d(L[tip],L[0]) > d(L[pip],L[0]) * 1.02;
 const cubitRasio = L => d(L[4],L[8]) / handSize(L);
 
-function isFrameHand(L){
-  return ext(L,4,3) && ext(L,8,6) && !ext(L,12,10) && !ext(L,16,14) && !ext(L,20,18);
-}
 function isOpenPalm(L){
   return ext(L,4,3) && ext(L,8,6) && ext(L,12,10) && ext(L,16,14) && ext(L,20,18);
 }
 
 // landmark → koordinat kanvas (video digambar mirror, jadi x dibalik)
 const px = p => ({ x:(1-p.x)*W, y:p.y*H });
-const cornerOf = L => px({ x:(L[2].x+L[5].x)/2, y:(L[2].y+L[5].y)/2 });
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 
 /* ══════════════════════════════════════════════════════════════
@@ -265,6 +279,12 @@ function lacakTangan(hands){
 
 /* ══ boot ════════════════════════════════════════════════ */
 document.getElementById("start").addEventListener("click", boot);
+
+/* Tautan Instagram hanya muncul kalau TAUTAN_IG diisi di KONFIG di atas. */
+if (TAUTAN_IG){
+  const a = document.getElementById("tautanIG");
+  a.href = TAUTAN_IG; a.textContent = TEKS_IG; a.style.display = "block";
+}
 
 async function boot(){
   try{
@@ -371,35 +391,63 @@ function loop(){
 }
 
 /* ══ tahap 1 — membidik ══════════════════════════════════ */
+/* Dua tangan mencubit; titik cubitan masing-masing tangan jadi sudut kotak yang
+   berseberangan. Kotaknya hidup mengikuti gerakan — bentuknya bebas, bukan preset.
+   Cubitan dipakai sebagai pengganti pose huruf L karena L bergantung pada jempol,
+   dan jempol adalah jari paling tidak stabil di MediaPipe. */
+function titikCubit(L){
+  return cubitRasio(L) < K.CUBIT_ON
+    ? px({ x:(L[4].x + L[8].x)/2, y:(L[4].y + L[8].y)/2 })
+    : null;
+}
+
 function aim(hands){
-  const corners = hands.filter(isFrameHand).map(cornerOf);
+  const sudut = hands.map(titikCubit).filter(Boolean);
   frameRect = null;
 
-  if (corners.length >= 2){
-    const [a,b] = corners;
+  if (sudut.length >= 2){
+    const [a,b] = sudut;
     const r = { x:Math.min(a.x,b.x), y:Math.min(a.y,b.y),
                 w:Math.abs(a.x-b.x), h:Math.abs(a.y-b.y) };
     if (r.w > W*K.MIN_KOTAK && r.h > H*K.MIN_KOTAK){
-      frameRect = r; armedRect = r; armedFrames++; lostFrames = 0;
+      frameRect = r; armedRect = r;
+      armedFrames = Math.min(K.TAHAN_BIDIK, armedFrames + 1);
+    } else {
+      // kotak masih terlalu kecil — tampilkan tapi jangan hitung sebagai menahan
+      frameRect = r;
+      armedFrames = Math.max(0, armedFrames - K.LUNTUR_BIDIK);
     }
-  } else if (armedFrames > K.KUNCI_FRAME){
-    if (++lostFrames > K.LEPAS_FRAME){
-      state = S.COUNT; countStart = performance.now(); armedFrames = 0;
-    }
-  } else { armedFrames = Math.max(0, armedFrames-1); }
+  } else {
+    armedFrames = Math.max(0, armedFrames - K.LUNTUR_BIDIK);
+  }
 
-  if (frameRect) brackets(frameRect, armedFrames > K.KUNCI_FRAME);
+  const maju = armedFrames / K.TAHAN_BIDIK;
+  if (frameRect) bingkaiCubit(frameRect, sudut, maju);
+
+  if (armedFrames >= K.TAHAN_BIDIK){
+    state = S.COUNT; countStart = performance.now(); armedFrames = 0;
+    return;
+  }
 
   const catatan = mode === "wajah"
-    ? "Mode wajah: tiap wajah di dalam kotak jadi satu puzzle sendiri."
-    : "Bentuk huruf <b>L</b> dengan kedua tangan — siku jempol-telunjuk jadi dua sudut kotak.";
-  setHud(frameRect ? (armedFrames > K.KUNCI_FRAME ? "terkunci" : "menahan") : "membidik",
-         frameRect ? "Turunkan tangan untuk memotret." : catatan);
+    ? "Mode wajah: semua wajah yang terlihat kamera dapat puzzle sendiri."
+    : "Cubit jempol dan telunjuk di <b>kedua tangan</b> — dua titik itu jadi sudut kotak.";
+  setHud(frameRect ? (maju > 0.5 ? "menahan" : "membidik") : "siap",
+         frameRect ? "Tahan cubitan sampai lingkaran penuh." : catatan);
 }
 
-function brackets(r, terkunci){
-  const len = Math.min(r.w, r.h) * 0.22;
-  ctx.strokeStyle = terkunci ? "#39D98A" : "#FF7A1A";
+/* Kotak bidik: garis penuh antar kedua titik cubitan, sudut dipertebal,
+   dan cincin progres di tiap tangan supaya jelas berapa lama lagi harus ditahan. */
+function bingkaiCubit(r, sudut, maju){
+  const warna = maju >= 1 ? "#39D98A" : "#FF7A1A";
+
+  ctx.save();
+  ctx.strokeStyle = warna; ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.35 + 0.45*maju;
+  ctx.strokeRect(r.x, r.y, r.w, r.h);          // sisi kotak, mengikuti bentuk cubitan
+  ctx.globalAlpha = 1;
+
+  const len = Math.min(r.w, r.h) * 0.22;       // sudut dipertebal
   ctx.lineWidth = 4; ctx.lineCap = "square";
   for (const [x,y,sx,sy] of [[r.x,r.y,1,1],[r.x+r.w,r.y,-1,1],
                              [r.x,r.y+r.h,1,-1],[r.x+r.w,r.y+r.h,-1,-1]]){
@@ -407,15 +455,24 @@ function brackets(r, terkunci){
     ctx.moveTo(x + sx*len, y); ctx.lineTo(x,y); ctx.lineTo(x, y + sy*len);
     ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(255,122,26,.25)"; ctx.lineWidth = 1;
-  ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+  for (const p of sudut){                      // cincin progres di tiap titik cubitan
+    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(242,239,230,.22)"; ctx.lineWidth = 3; ctx.stroke();
+    if (maju > 0){
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 20, -Math.PI/2, -Math.PI/2 + Math.PI*2*maju);
+      ctx.strokeStyle = warna; ctx.lineWidth = 3; ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 /* ══ tahap 2 — hitung mundur ═════════════════════════════ */
 function count(){
   const sisa = K.HITUNG_MUNDUR - (performance.now() - countStart)/1000;
   if (sisa <= 0){ if (!sedangJepret) capture(); return; }
-  if (armedRect) brackets(armedRect, true);
+  if (armedRect) bingkaiCubit(armedRect, [], 1);   // kotak terkunci, tanpa cincin progres
 
   const n = Math.ceil(sisa), t = 1 - (n - sisa);
   ctx.save();
@@ -458,13 +515,16 @@ async function capture(){
       const det = await siapkanWajah();
       const hasil = det.detect(bingkai).detections || [];
 
-      // hanya wajah yang titik tengahnya ada di dalam kotak bidik, urut kiri → kanan
+      // Seluruh frame dipakai, bukan hanya isi kotak bidik. Saat satu orang
+      // membingkai dengan tangannya, kotak itu hanya menutupi dirinya sendiri —
+      // menyaring dengan kotak membuat wajah orang lain ikut terbuang.
+      // Wajah terbesar didahulukan (paling dekat kamera), lalu diurutkan kiri → kanan.
       const wajah = hasil
         .map(w => w.boundingBox)
-        .filter(b => b && b.originX + b.width/2  > r.x && b.originX + b.width/2  < r.x + r.w
-                       && b.originY + b.height/2 > r.y && b.originY + b.height/2 < r.y + r.h)
-        .sort((a,b) => a.originX - b.originX)
-        .slice(0, K.MAKS_WAJAH);
+        .filter(Boolean)
+        .sort((a,b) => (b.width*b.height) - (a.width*a.height))
+        .slice(0, K.MAKS_WAJAH)
+        .sort((a,b) => a.originX - b.originX);
 
       for (const b of wajah){
         // kotak wajah dilebarkan supaya kepala dan bahu ikut terpotret
@@ -593,7 +653,8 @@ const papanSelesai = pap => pap.urutan.every((v,i) => v === i);
 const semuaSelesai = () => papan.length > 0 && papan.every(papanSelesai);
 
 function puzzle(hands){
-  ctx.fillStyle = "rgba(8,10,15,.62)"; ctx.fillRect(0,0,W,H);
+  // Latar hanya diredupkan tipis — video kamera tetap terlihat di belakang keping.
+  ctx.fillStyle = `rgba(8,10,15,${K.REDUP_PUZZLE})`; ctx.fillRect(0,0,W,H);
 
   lacakTangan(hands);
   for (const q of [...penunjuk.values()]){
@@ -663,11 +724,14 @@ function selesai(hands){
 
 function ubin(foto, idx, x, y, size, src, tepi, angkat){
   const sx = (idx % N) * src, sy = Math.floor(idx / N) * src;
-  if (angkat){ ctx.save(); ctx.shadowColor = "rgba(0,0,0,.6)";
+  ctx.save();
+  // keping sedikit tembus pandang supaya wajah asli di kamera masih terbaca di latar
+  ctx.globalAlpha = angkat ? K.ALPHA_ANGKAT : K.ALPHA_PAPAN;
+  if (angkat){ ctx.shadowColor = "rgba(0,0,0,.6)";
                ctx.shadowBlur = 28; ctx.shadowOffsetY = 10; }
   ctx.drawImage(foto, sx, sy, src, src, x+1.5, y+1.5, size-3, size-3);
-  if (angkat) ctx.restore();
-  if (tepi){ ctx.strokeStyle = tepi; ctx.lineWidth = 2;
+  ctx.restore();
+  if (tepi){ ctx.strokeStyle = tepi; ctx.lineWidth = 2;     // garis tepi tetap pekat
              ctx.strokeRect(x+1.5, y+1.5, size-3, size-3); }
 }
 
@@ -756,7 +820,7 @@ addEventListener("keydown", e => {
   if (k === "r"){
     state = S.AIM; papan = []; penunjuk.clear();
     armedFrames = 0; lostFrames = 0; palmFrames = 0;
-    saveArmed = true; pesanJepret = "";
+    saveArmed = true; pesanJepret = ""; frameRect = null;
   }
 });
 </script>
