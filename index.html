@@ -17,6 +17,22 @@
     --grain:#6C7686;        /* teks sekunder */
     --fix:#39D98A;          /* benar / selesai */
   }
+  /* Tema cerah. Nilainya dipilih agar kontras teks tetap aman di layar terang,
+     bukan sekadar membalik hitam-putih. */
+  body.cerah{
+    --ink:#F4F1EA;
+    --film:#FFFFFF;
+    --garis:#DDD6C7;
+    --safelight:#C2410C;
+    --emulsion:#151A24;
+    --grain:#5F6672;
+    --fix:#0F8F5B;
+  }
+  body.cerah #status{background:linear-gradient(180deg,rgba(244,241,234,.85),transparent)}
+  body.cerah #keys{background:linear-gradient(0deg,rgba(244,241,234,.94),transparent)}
+  body.cerah #coach{box-shadow:0 8px 30px rgba(60,50,30,.16)}
+  body.cerah .lampu{background:rgba(255,255,255,.85)}
+  body.cerah select{background:#FFFFFF}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:var(--ink);color:var(--emulsion);
     font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -30,7 +46,7 @@
   #status{position:fixed;top:0;left:0;right:0;padding:14px 18px;
     display:flex;gap:16px;align-items:center;justify-content:space-between;
     pointer-events:none;font-size:12px;letter-spacing:.08em;
-    background:linear-gradient(180deg,rgba(8,10,15,.8),transparent)}
+    background:linear-gradient(180deg,rgba(8,10,15,.82),transparent)}
   #rec{color:var(--safelight);text-transform:uppercase;white-space:nowrap}
   #rec::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
     background:var(--safelight);margin-right:8px;vertical-align:middle;
@@ -52,7 +68,7 @@
 
   /* ══ Pemandu bawah: ikon gesture + satu kalimat ══
      Di bawah tengah, dekat arah pandang saat orang melihat tangannya sendiri. */
-  #coach{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+  #coach{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);
     display:flex;gap:14px;align-items:center;max-width:min(92vw,60ch);
     background:rgba(18,22,31,.9);border:1px solid var(--garis);border-radius:14px;
     padding:13px 20px 13px 15px;pointer-events:none;
@@ -67,7 +83,7 @@
     letter-spacing:.05em}
 
   /* ══ Daftar pintasan, disembunyikan sampai diminta ══ */
-  #keys{position:fixed;bottom:0;left:0;right:0;padding:12px 18px;
+  #keys{position:fixed;bottom:0;left:0;right:0;padding:11px 18px 13px;
     display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
     color:var(--grain);font-size:11px;letter-spacing:.06em;pointer-events:none;
     background:linear-gradient(0deg,rgba(8,10,15,.92),transparent)}
@@ -108,11 +124,11 @@
   #start[disabled]{opacity:.55;cursor:progress}
 
   details.atur{margin-top:18px;text-align:left}
-  details.atur summary{list-style:none;cursor:pointer;color:var(--grain);
-    font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
-    padding:9px;border-radius:6px}
+  details.atur summary{list-style:none;cursor:pointer;color:var(--emulsion);
+    font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    text-align:center;padding:13px;border-radius:8px;border:1px solid var(--garis)}
   details.atur summary::-webkit-details-marker{display:none}
-  details.atur summary:hover{color:var(--emulsion)}
+  details.atur summary:hover{border-color:var(--grain)}
   details.atur summary::after{content:" ▾"}
   details.atur[open] summary::after{content:" ▴"}
   .baris{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
@@ -153,15 +169,16 @@
 <div id="coach" class="sembunyi"><span id="coachIkon"></span><span id="coachTeks"></span></div>
 
 <button id="tanya" title="Pintasan keyboard">?</button>
-<div id="keys" hidden>
+<div id="keys">
   <span><kbd>C</kbd>jepret manual</span>
   <span><kbd>X</kbd>batal kotak</span>
   <span><kbd>3 4 5</kbd>ukuran grid</span>
   <span><kbd>T</kbd>transparansi</span>
   <span><kbd>S</kbd>simpan</span>
   <span><kbd>R</kbd>ulang</span>
-  <span><kbd>D</kbd>titik tangan</span>
-  <span>mouse juga jalan</span>
+  <span><kbd>D</kbd>sembunyikan titik tangan</span>
+  <span><kbd>L</kbd>gelap / cerah</span>
+  <span><kbd>?</kbd>sembunyikan baris ini</span>
 </div>
 
 <div id="gate"><div class="plate">
@@ -191,6 +208,11 @@
           <option value="3">3 × 3</option>
           <option value="4">4 × 4</option>
           <option value="5">5 × 5</option>
+        </select></div>
+      <div class="bidang"><label>Tampilan</label>
+        <select id="temaSelect">
+          <option value="gelap">gelap</option>
+          <option value="cerah">cerah</option>
         </select></div>
       <div class="bidang"><label>Maks tangan</label>
         <select id="handSelect">
@@ -276,6 +298,33 @@ const TEKS_IG   = "Sudah coba? Ceritakan di postingan ini →";
 /* warna penunjuk — tiap tangan dapat warna berbeda supaya jelas siapa pegang apa */
 const WARNA = ["#E5387B", "#39D98A", "#4EA8FF", "#FFC53D", "#B36BFF", "#FF7A1A"];
 
+/* ══════════════════════════════════════════════════════════════
+   TEMA — warna kanvas dikumpulkan di sini supaya bisa diganti sekaligus.
+   CSS punya variabelnya sendiri; keduanya ditukar bersamaan oleh pakaiTema().
+   Nilai RGB polos disediakan untuk warna yang butuh transparansi.
+   ══════════════════════════════════════════════════════════════ */
+const TEMA = {
+  gelap: {
+    ink:"#080A0F",  inkRGB:"8,10,15",
+    teks:"#F2EFE6", teksRGB:"242,239,230",
+    aksen:"#FF7A1A", aksenRGB:"255,122,26",
+    benar:"#39D98A", redupPapan:.22, redupBidik:.28
+  },
+  cerah: {
+    ink:"#F4F1EA",  inkRGB:"244,241,234",
+    teks:"#151A24", teksRGB:"21,26,36",
+    aksen:"#C2410C", aksenRGB:"194,65,12",
+    benar:"#0F8F5B", redupPapan:.26, redupBidik:.32
+  }
+};
+let tema = "gelap";
+const C = () => TEMA[tema];
+
+function pakaiTema(nama){
+  tema = TEMA[nama] ? nama : "gelap";
+  document.body.classList.toggle("cerah", tema === "cerah");
+}
+
 /* ══ elemen & state ══════════════════════════════════════ */
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 const recEl = document.getElementById("rec");
@@ -291,13 +340,16 @@ const camSelect  = document.getElementById("camSelect");
 const modeSelect = document.getElementById("modeSelect");
 const gridSelect = document.getElementById("gridSelect");
 const handSelect = document.getElementById("handSelect");
+const temaSelect = document.getElementById("temaSelect");
 const tombolMulai = document.getElementById("start");
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true;
 
 let landmarker = null, berkasVisi = null;
 let W = 1280, H = 720, lastVideoTime = -1, lastHands = [];
-let showDots = false;
+let showDots = true;        // titik dan kerangka tangan tampil sejak awal —
+                            // orang lebih paham (dan lebih suka) melihat apa
+                            // yang dibaca kamera. Tombol D menyembunyikannya.
 
 const S = { LOAD:"LOAD", AIM:"AIM", COUNT:"COUNT", SHOT:"SHOT", PUZZLE:"PUZZLE", DONE:"DONE" };
 let state = S.LOAD;
@@ -415,6 +467,9 @@ function gambarLangkah(){
 /* ══ boot ════════════════════════════════════════════════ */
 tombolMulai.addEventListener("click", boot);
 
+// tema langsung berubah saat dipilih, supaya terlihat sebelum kamera menyala
+temaSelect.addEventListener("change", () => pakaiTema(temaSelect.value));
+
 /* Tombol ? membuka daftar pintasan. Disembunyikan secara asali supaya
    pengguna pertama kali tidak dibanjiri pilihan. */
 const keysEl = document.getElementById("keys");
@@ -431,6 +486,7 @@ if (TAUTAN_IG){
 async function boot(){
   tombolMulai.disabled = true;
   try{
+    pakaiTema(temaSelect.value);
     N           = parseInt(gridSelect.value, 10);
     jumlahKotak = Math.min(K.MAKS_KOTAK, parseInt(modeSelect.value, 10));
 
@@ -534,7 +590,7 @@ function loop(){
   ctx.drawImage(video,0,0,W,H); ctx.restore();
 
   if (state === S.AIM || state === S.COUNT){
-    ctx.fillStyle = "rgba(8,10,15,.28)"; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = `rgba(${C().inkRGB},${C().redupBidik})`; ctx.fillRect(0,0,W,H);
   }
 
   if (state === S.AIM)   aim();
@@ -544,7 +600,7 @@ function loop(){
 
   if (showDots) drawDots(hands);
   if (savedFlash > 0){
-    ctx.fillStyle = `rgba(242,239,230,${savedFlash})`; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = `rgba(${C().teksRGB},${savedFlash})`; ctx.fillRect(0,0,W,H);
     savedFlash -= 0.06;
   }
 }
@@ -655,7 +711,7 @@ function aim(){
   let ikon = "cubit", teks;
   if (adaYangDibidik){
     ikon = "tahan";
-    teks = "Tahan cubitanmu sampai lingkaran penuh." +
+    teks = "Tahan cubitanmu sampai <b>garis kotaknya penuh</b>." +
            "<small>Kotaknya ikut bergerak — atur dulu sebelum menahan.</small>";
   } else if (cubitTerlihat >= 2){
     ikon = "kotak";
@@ -682,19 +738,34 @@ function aim(){
          teks, ikon);
 }
 
-/* Kotak bidik: sisi penuh mengikuti bentuk cubitan, sudut dipertebal, dan
-   cincin progres di tiap titik cubitan supaya jelas berapa lama lagi ditahan. */
+/* Kotak bidik. Progres menahan digambar sebagai garis kotak yang terisi memutar,
+   bukan cincin di jari — yang sedang dibentuk pengguna adalah kotak, jadi
+   penanda kemajuannya harus benda yang sama. */
 function gambarKotak(r, sudut, maju, terkunci){
-  const warna = terkunci ? "#39D98A" : "#FF7A1A";
+  const warna = terkunci ? C().benar : C().aksen;
 
   ctx.save();
+
+  // jalur kotak yang belum terisi, samar
   ctx.strokeStyle = warna; ctx.lineWidth = 2;
-  ctx.globalAlpha = terkunci ? 0.9 : 0.35 + 0.45*maju;
+  ctx.globalAlpha = terkunci ? 0.9 : 0.22;
   ctx.strokeRect(r.x, r.y, r.w, r.h);
   ctx.globalAlpha = 1;
 
-  const len = Math.min(r.w, r.h) * 0.22;
-  ctx.lineWidth = 4; ctx.lineCap = "square";
+  // bagian yang sudah terisi: garis putus dengan satu ruas sepanjang progres,
+  // strokeRect menggambar searah jarum jam mulai dari sudut kiri atas
+  if (!terkunci && maju > 0){
+    const keliling = 2 * (r.w + r.h);
+    ctx.save();
+    ctx.strokeStyle = warna; ctx.lineWidth = 5; ctx.lineCap = "butt";
+    ctx.setLineDash([keliling * maju, keliling]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.restore();
+  }
+
+  // sudut dipertebal supaya bentuk kotak tetap terbaca walau garisnya belum penuh
+  const len = Math.min(r.w, r.h) * 0.2;
+  ctx.strokeStyle = warna; ctx.lineWidth = 4; ctx.lineCap = "square";
   for (const [x,y,sx,sy] of [[r.x,r.y,1,1],[r.x+r.w,r.y,-1,1],
                              [r.x,r.y+r.h,1,-1],[r.x+r.w,r.y+r.h,-1,-1]]){
     ctx.beginPath();
@@ -702,14 +773,12 @@ function gambarKotak(r, sudut, maju, terkunci){
     ctx.stroke();
   }
 
+  // titik kecil di tiap cubitan, penanda sudut mana yang dipegang siapa
   for (const p of sudut){
-    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2);
-    ctx.strokeStyle = "rgba(242,239,230,.22)"; ctx.lineWidth = 3; ctx.stroke();
-    if (maju > 0){
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 20, -Math.PI/2, -Math.PI/2 + Math.PI*2*maju);
-      ctx.strokeStyle = warna; ctx.lineWidth = 3; ctx.stroke();
-    }
+    ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI*2);
+    ctx.fillStyle = warna; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 13, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(${C().teksRGB},.4)`; ctx.lineWidth = 2; ctx.stroke();
   }
 
   /* Ukuran kotak, supaya jelas seberapa besar area yang sedang dibidik.
@@ -723,7 +792,7 @@ function gambarKotak(r, sudut, maju, terkunci){
   const diAtas = r.y > tinggiTeks * 1.7;        // kalau mepet atas, taruh di dalam kotak
   ctx.textBaseline = diAtas ? "bottom" : "top";
   const ty = diAtas ? r.y - tinggiTeks*0.5 : r.y + tinggiTeks*0.5;
-  ctx.fillStyle = "rgba(8,10,15,.65)";          // alas gelap supaya terbaca di latar ramai
+  ctx.fillStyle = `rgba(${C().inkRGB},.72)`;    // alas supaya teks terbaca di latar ramai
   const lebar = ctx.measureText(label).width;
   ctx.fillRect(r.x - 4, diAtas ? ty - tinggiTeks : ty - 2, lebar + 10, tinggiTeks + 6);
   ctx.fillStyle = warna;
@@ -742,7 +811,7 @@ function count(){
   ctx.save();
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = fontKanvas(0.34);
-  ctx.fillStyle = `rgba(255,122,26,${0.25 + 0.6*(1-t)})`;
+  ctx.fillStyle = `rgba(${C().aksenRGB},${0.25 + 0.6*(1-t)})`;
   ctx.fillText(n, W/2, H/2);
   ctx.restore();
   setHud("hitung mundur", "Turunkan tangan — kamera memotret sebentar lagi.", "tunggu");
@@ -806,11 +875,11 @@ function acak(){
 
 /* Jeda menampilkan foto utuh sebelum pecah, supaya terasa ada momen memotret. */
 function shot(){
-  ctx.fillStyle = "rgba(8,10,15,.62)"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = `rgba(${C().inkRGB},.62)`; ctx.fillRect(0,0,W,H);
   papan.forEach((p,i) => {
     const g = geo(i);
     ctx.drawImage(p.foto, g.x, g.y, g.sisi, g.sisi);
-    ctx.strokeStyle = "#FF7A1A"; ctx.lineWidth = 3;
+    ctx.strokeStyle = C().aksen; ctx.lineWidth = 3;
     ctx.strokeRect(g.x-5, g.y-5, g.sisi+10, g.sisi+10);
   });
   setHud("terjepret",
@@ -916,7 +985,7 @@ function gambarDenyut(){
     const tumbuh = g.sel * 0.13 * t;
     ctx.save();
     ctx.globalAlpha = 1 - t;
-    ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 3;
+    ctx.strokeStyle = C().benar; ctx.lineWidth = 3;
     ctx.strokeRect(x - tumbuh, y - tumbuh, g.sel + tumbuh*2, g.sel + tumbuh*2);
     ctx.restore();
   }
@@ -927,7 +996,7 @@ const semuaSelesai = () => papan.length > 0 && papan.every(papanSelesai);
 
 function puzzle(hands){
   // Latar hanya diredupkan tipis — video kamera tetap terlihat di belakang keping.
-  ctx.fillStyle = `rgba(8,10,15,${K.REDUP_PUZZLE})`; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = `rgba(${C().inkRGB},${C().redupPapan})`; ctx.fillRect(0,0,W,H);
 
   lacakTangan(hands);
   for (const q of [...penunjuk.values()]){
@@ -949,16 +1018,16 @@ function puzzle(hands){
   papan.forEach((pap,i) => {
     const g = geo(i);
     const src = pap.foto.width / N;
-    ctx.strokeStyle = "rgba(242,239,230,.10)"; ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(${C().teksRGB},.14)`; ctx.lineWidth = 1;
     ctx.strokeRect(g.x, g.y, g.sisi, g.sisi);
     for (let s = 0; s < N*N; s++){
       const idx = pap.urutan[s];
       if (idx < 0) continue;                  // slot kosong, kepingnya lagi diangkat
       ubin(pap.foto, idx, g.x + (s%N)*g.sel, g.y + Math.floor(s/N)*g.sel, g.sel, src,
-           state === S.DONE ? null : (idx === s ? "#39D98A" : "rgba(242,239,230,.20)"));
+           state === S.DONE ? null : (idx === s ? C().benar : `rgba(${C().teksRGB},.22)`));
     }
     if (papanSelesai(pap)){
-      ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 3;
+      ctx.strokeStyle = C().benar; ctx.lineWidth = 3;
       ctx.strokeRect(g.x-5, g.y-5, g.sisi+10, g.sisi+10);
     }
   });
@@ -974,7 +1043,7 @@ function puzzle(hands){
            pap.foto.width/N, warna, true);
     }
     ctx.beginPath(); ctx.arc(q.x, q.y, q.cubit ? 9 : 15, 0, 7);
-    ctx.strokeStyle = q.cubit ? warna : "rgba(242,239,230,.45)";
+    ctx.strokeStyle = q.cubit ? warna : `rgba(${C().teksRGB},.5)`;
     ctx.lineWidth = 2.5; ctx.stroke();
   }
 
@@ -1012,7 +1081,7 @@ function selesai(hands){
     else {
       ctx.save();
       ctx.globalAlpha = (1 - t) * 0.9;
-      ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 5;
+      ctx.strokeStyle = C().benar; ctx.lineWidth = 5;
       papan.forEach((_,i) => {
         const g = geo(i), tumbuh = g.sisi * 0.09 * t;
         ctx.strokeRect(g.x - tumbuh, g.y - tumbuh, g.sisi + tumbuh*2, g.sisi + tumbuh*2);
@@ -1023,7 +1092,7 @@ function selesai(hands){
 
   if (p > 0){
     const lebar = W * 0.6;
-    ctx.strokeStyle = "#FF7A1A"; ctx.lineWidth = 6;
+    ctx.strokeStyle = C().aksen; ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo((W-lebar)/2, H - 46); ctx.lineTo((W-lebar)/2 + lebar*p, H - 46);
     ctx.stroke();
@@ -1058,7 +1127,7 @@ function save(){
   const out = document.createElement("canvas");
   out.width = k*sisi + (k-1)*sela; out.height = sisi;
   const g = out.getContext("2d");
-  g.fillStyle = "#080A0F"; g.fillRect(0,0,out.width,out.height);
+  g.fillStyle = C().ink; g.fillRect(0,0,out.width,out.height);
 
   papan.forEach((pap, i) => {
     const src = pap.foto.width / N, off = i*(sisi + sela), sel = sisi/N;
@@ -1177,12 +1246,12 @@ const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,
                [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 function drawDots(hands){
   for (const L of hands){
-    ctx.strokeStyle = "rgba(255,122,26,.55)"; ctx.lineWidth = 2;
+    ctx.strokeStyle = `rgba(${C().aksenRGB},.6)`; ctx.lineWidth = 2;
     for (const [a,b] of BONES){
       const p = px(L[a]), q = px(L[b]);
       ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
     }
-    ctx.fillStyle = "#F2EFE6";
+    ctx.fillStyle = C().teks;
     for (const l of L){ const p = px(l); ctx.beginPath(); ctx.arc(p.x,p.y,3.5,0,7); ctx.fill(); }
 
     /* Angka rasio cubitan, untuk menyetel ambang berdasarkan data nyata di lapangan:
@@ -1191,7 +1260,8 @@ function drawDots(hands){
     const r = cubitRasio(L), p = px(L[8]);
     ctx.font = fontKanvas(0.030);
     ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-    ctx.fillStyle = r < K.BIDIK_ON ? "#39D98A" : (r < K.TARIK_ON ? "#FFC53D" : "#6C7686");
+    ctx.fillStyle = r < K.BIDIK_ON ? C().benar
+                  : (r < K.TARIK_ON ? C().aksen : `rgba(${C().teksRGB},.55)`);
     ctx.fillText(r.toFixed(2), p.x + 18, p.y - 12);
   }
 }
@@ -1249,6 +1319,13 @@ addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   if (k === "d") showDots = !showDots;
   if (k === "?" || k === "/") keysEl.hidden = !keysEl.hidden;
+
+  if (k === "l"){                              // gelap ⇄ cerah
+    pakaiTema(tema === "gelap" ? "cerah" : "gelap");
+    temaSelect.value = tema;
+    pesanSesaat = `Tampilan ${tema}`;
+    pesanSampai = performance.now() + 1400;
+  }
 
   if (k === "t"){                              // gilir transparansi keping
     iAlpha = (iAlpha + 1) % K.ALPHA_PILIHAN.length;
