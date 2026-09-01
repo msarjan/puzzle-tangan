@@ -79,6 +79,7 @@
 <div class="hud" id="keys">
   <span><kbd>C</kbd>jepret manual</span>
   <span><kbd>3 4 5</kbd>ukuran grid</span>
+  <span><kbd>T</kbd>transparansi</span>
   <span><kbd>S</kbd>simpan</span>
   <span><kbd>R</kbd>ulang</span>
   <span><kbd>D</kbd>titik tangan</span>
@@ -175,8 +176,9 @@ const K = {
   PX_PAPAN:        900,    // resolusi foto tiap papan
 
   // tampilan saat menyusun — keping tembus pandang, kamera masih terlihat di latar
-  ALPHA_PAPAN:     0.85,   // 1 = keping pekat, 0.7 = latar makin dominan
-  ALPHA_ANGKAT:    1.00,   // keping yang sedang diangkat dibuat pekat supaya menonjol
+  ALPHA_PILIHAN: [1.00, 0.85, 0.70, 0.55],   // digilir dengan tombol T saat aplikasi jalan
+  ALPHA_AWAL:      1,      // indeks yang dipakai saat mulai (1 = 0.85)
+  ALPHA_ANGKAT:    1.00,   // keping yang sedang diangkat selalu pekat supaya menonjol
   REDUP_PUZZLE:    0.22    // seberapa gelap video di belakang papan. Naikkan kalau
                            //   latar terlalu ramai sampai keping susah dilihat.
 };
@@ -209,6 +211,8 @@ let state = S.LOAD;
 
 let N = 3;                 // ukuran grid, bisa diubah lewat tombol 3/4/5
 let jumlahKotak = 1;       // berapa kotak yang harus terkunci sebelum jepret
+let iAlpha = K.ALPHA_AWAL; // indeks transparansi keping, digilir dengan tombol T
+const alphaPapan = () => K.ALPHA_PILIHAN[iAlpha];
 
 let countStart = 0, shotStart = 0;
 
@@ -524,6 +528,23 @@ function gambarKotak(r, sudut, maju, terkunci){
       ctx.strokeStyle = warna; ctx.lineWidth = 3; ctx.stroke();
     }
   }
+
+  /* Ukuran kotak, supaya jelas seberapa besar area yang sedang dibidik.
+     Persentase dihitung terhadap luas layar — lebih berguna daripada piksel
+     mentah saat menyetel di kelas dengan resolusi kamera berbeda-beda. */
+  const persen = Math.round((r.w * r.h) / (W * H) * 100);
+  const label = `${Math.round(r.w)} × ${Math.round(r.h)} · ${persen}% layar`;
+  ctx.font = '700 20px "JetBrains Mono",monospace';
+  ctx.textAlign = "left";
+  const diAtas = r.y > 34;                      // kalau mepet atas, taruh di dalam kotak
+  ctx.textBaseline = diAtas ? "bottom" : "top";
+  const ty = diAtas ? r.y - 10 : r.y + 10;
+  ctx.fillStyle = "rgba(8,10,15,.65)";          // alas gelap supaya terbaca di latar ramai
+  const lebar = ctx.measureText(label).width;
+  ctx.fillRect(r.x - 4, diAtas ? ty - 20 : ty - 2, lebar + 10, 24);
+  ctx.fillStyle = warna;
+  ctx.fillText(label, r.x + 1, diAtas ? ty - 1 : ty + 1);
+
   ctx.restore();
 }
 
@@ -692,7 +713,13 @@ function puzzle(hands){
     if (!q.cubit && q.cubitLalu) lepasUbin(q);
     q.cubitLalu = q.cubit;
   }
+  /* Status selesai harus bisa dibatalkan. Kalau keping digeser lagi setelah
+     puzzle sempat benar, gesture simpan wajib mati — kalau tidak, telapak
+     terbuka akan menyimpan susunan yang sudah teracak ulang. */
   if (state === S.PUZZLE && semuaSelesai()) state = S.DONE;
+  else if (state === S.DONE && !semuaSelesai()){
+    state = S.PUZZLE; palmFrames = 0; saveArmed = true;
+  }
 
   // papan dan keping yang sedang diam
   papan.forEach((pap,i) => {
@@ -756,7 +783,7 @@ function ubin(foto, idx, x, y, size, src, tepi, angkat){
   const sx = (idx % N) * src, sy = Math.floor(idx / N) * src;
   ctx.save();
   // keping sedikit tembus pandang supaya gambar kamera masih terbaca di latar
-  ctx.globalAlpha = angkat ? K.ALPHA_ANGKAT : K.ALPHA_PAPAN;
+  ctx.globalAlpha = angkat ? K.ALPHA_ANGKAT : alphaPapan();
   if (angkat){ ctx.shadowColor = "rgba(0,0,0,.6)";
                ctx.shadowBlur = 28; ctx.shadowOffsetY = 10; }
   ctx.drawImage(foto, sx, sy, src, src, x+1.5, y+1.5, size-3, size-3);
@@ -792,7 +819,14 @@ function save(){
 }
 
 /* ══ HUD, titik tangan, kontrol cadangan ═════════════════ */
-function setHud(status, hint){ recEl.textContent = status; hintEl.innerHTML = hint; }
+let pesanSesaat = "", pesanSampai = 0;
+
+function setHud(status, hint){
+  // pesan sesaat (misal perubahan transparansi) menimpa petunjuk biasa sebentar
+  if (pesanSesaat && performance.now() < pesanSampai) hint = pesanSesaat;
+  else pesanSesaat = "";
+  recEl.textContent = status; hintEl.innerHTML = hint;
+}
 
 const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
                [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
@@ -842,6 +876,12 @@ window.addEventListener("pointerup", () => {
 addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   if (k === "d") showDots = !showDots;
+
+  if (k === "t"){                              // gilir transparansi keping
+    iAlpha = (iAlpha + 1) % K.ALPHA_PILIHAN.length;
+    pesanSesaat = `Transparansi keping ${Math.round(alphaPapan()*100)}%`;
+    pesanSampai = performance.now() + 1600;
+  }
 
   if ("345".includes(k)){                      // ganti ukuran grid, acak ulang
     N = parseInt(k, 10);
