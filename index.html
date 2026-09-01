@@ -130,9 +130,17 @@ import { HandLandmarker, FilesetResolver }
    KONFIG — semua ambang ada di sini, tidak ditanam di dalam logika
    ══════════════════════════════════════════════════════════════ */
 const K = {
-  // cubitan: dua ambang supaya status tidak berkedip di sekitar batas
-  CUBIT_ON:        0.26,   // rasio jarak jempol–telunjuk terhadap ukuran tangan
-  CUBIT_OFF:       0.40,   // harus lebih besar dari CUBIT_ON
+  /* Cubitan dipakai untuk dua hal berbeda, jadi ambangnya dipisah.
+     Angka ini rasio jarak ujung jempol–telunjuk terhadap ukuran telapak.
+     Tekan D saat aplikasi jalan untuk melihat angka aslinya di layar. */
+
+  // membidik — harus rapat betul, supaya tangan setengah terbuka tidak terbaca
+  BIDIK_ON:        0.17,   // makin kecil makin harus benar-benar bertemu
+  BIDIK_OFF:       0.30,
+
+  // menarik keping — sedikit lebih longgar supaya tidak melelahkan saat menyusun
+  TARIK_ON:        0.22,
+  TARIK_OFF:       0.36,
 
   // pelacakan identitas tangan antar frame
   JARAK_COCOK:     0.22,   // × lebar layar. Perpindahan wajar satu tangan per frame.
@@ -146,8 +154,9 @@ const K = {
   MIN_KOTAK:       0.12,   // × lebar/tinggi. Turunkan (0.08) untuk pemakaian jarak jauh.
                            //   diturunkan dari 0.16 karena kotak jadi lebih kecil
                            //   saat beberapa orang membidik bersamaan
-  PASANGAN_MAKS:   0.60,   // × lebar layar. Dua titik cubitan yang lebih jauh dari ini
-                           //   dianggap milik orang berbeda, tidak dipasangkan.
+  PASANGAN_MAKS:   0.55,   // × diagonal layar, dan HANYA berlaku kalau kotaknya lebih
+                           //   dari satu. Untuk satu kotak batas ini dimatikan supaya
+                           //   kotak bisa dibuat sebesar seluruh layar.
                            //   Turunkan kalau tangan antar orang sering tertukar.
   COCOK_KOTAK:     0.25,   // × lebar layar. Perpindahan wajar titik tengah kotak per frame.
   TAHAN_BIDIK:     90,     // frame kedua cubitan harus ditahan (±1,5 detik di 60fps)
@@ -232,7 +241,7 @@ const penunjuk = new Map();
 let idBerikut = 0;
 
 function penunjukBaru(id){
-  return { id, x:0, y:0, cubit:false, cubitLalu:false, hilang:0,
+  return { id, x:0, y:0, cubit:false, cubitLalu:false, bidik:false, hilang:0,
            jejak:[], papan:-1, dari:-1, ubin:-1 };
 }
 
@@ -257,9 +266,13 @@ function lacakTangan(hands){
 
     q.x = p.x; q.y = p.y; q.hilang = 0;
 
-    const r = cubitRasio(L);                  // histeresis per tangan
-    if (r < K.CUBIT_ON) q.cubit = true;
-    else if (r > K.CUBIT_OFF) q.cubit = false;
+    // Dua status terpisah dari satu rasio: membidik butuh cubitan lebih rapat
+    // daripada menarik keping. Keduanya pakai histeresis supaya tidak berkedip.
+    const r = cubitRasio(L);
+    if (r < K.TARIK_ON) q.cubit = true;
+    else if (r > K.TARIK_OFF) q.cubit = false;
+    if (r < K.BIDIK_ON) q.bidik = true;
+    else if (r > K.BIDIK_OFF) q.bidik = false;
 
     q.jejak.push({ x:q.x, y:q.y });
     if (q.jejak.length > K.JEJAK) q.jejak.shift();
@@ -268,7 +281,7 @@ function lacakTangan(hands){
   // penunjuk yang tangannya tidak terlihat frame ini
   for (const id of belum){
     const q = penunjuk.get(id);
-    q.cubit = false;                          // dianggap melepas
+    q.cubit = false; q.bidik = false;          // dianggap melepas
     if (++q.hilang > K.HILANG_FRAME){
       lepasUbin(q);                           // kembalikan keping yang sempat diangkat
       penunjuk.delete(id);
@@ -377,13 +390,6 @@ function loop(){
 }
 
 /* ══ tahap 1 — membidik ══════════════════════════════════ */
-/* Titik cubitan sebuah tangan, atau null kalau tangan itu tidak sedang mencubit. */
-function titikCubit(L){
-  return cubitRasio(L) < K.CUBIT_ON
-    ? px({ x:(L[4].x + L[8].x)/2, y:(L[4].y + L[8].y)/2 })
-    : null;
-}
-
 /* Memasangkan titik-titik cubitan menjadi kotak.
 
    Aplikasi hanya melihat sekumpulan titik, tidak tahu titik mana milik siapa.
@@ -397,10 +403,15 @@ function pasangkan(titik){
       calon.push({ i, j, jarak:Math.hypot(titik[i].x-titik[j].x, titik[i].y-titik[j].y) });
   calon.sort((a,b) => a.jarak - b.jarak);
 
+  // Batas jarak hanya masuk akal kalau ada lebih dari satu kotak — di situlah
+  // pasangan bisa tertukar antar orang. Untuk satu kotak batasnya dimatikan,
+  // supaya kotak boleh selebar layar penuh.
+  const batas = jumlahKotak > 1 ? K.PASANGAN_MAKS * Math.hypot(W, H) : Infinity;
+
   const terpakai = new Set(), kotak = [];
   for (const c of calon){
     if (terpakai.has(c.i) || terpakai.has(c.j)) continue;
-    if (c.jarak > K.PASANGAN_MAKS * W) continue;
+    if (c.jarak > batas) continue;
     const a = titik[c.i], b = titik[c.j];
     const r = { x:Math.min(a.x,b.x), y:Math.min(a.y,b.y),
                 w:Math.abs(a.x-b.x), h:Math.abs(a.y-b.y) };
@@ -418,7 +429,14 @@ let idKotak = 0;
 let kotakKunci = [];        // kotak yang sudah selesai ditahan, menunggu yang lain
 
 function aim(hands){
-  const titik = hands.map(titikCubit).filter(Boolean);
+  // Pelacak tangan yang sama dipakai di tahap menyusun — identitas tangan terjaga
+  // dan status cubitannya sudah lewat histeresis, jadi progres tahan tidak
+  // mundur hanya karena satu frame meleset.
+  lacakTangan(hands);
+  const titik = [...penunjuk.values()]
+    .filter(q => q.bidik && q.id !== "mouse")
+    .map(q => ({ x:q.x, y:q.y }));
+
   const calon = pasangkan(titik);
   const belum = new Set(kotakHidup.keys());
 
@@ -787,6 +805,15 @@ function drawDots(hands){
     }
     ctx.fillStyle = "#F2EFE6";
     for (const l of L){ const p = px(l); ctx.beginPath(); ctx.arc(p.x,p.y,3.5,0,7); ctx.fill(); }
+
+    /* Angka rasio cubitan, untuk menyetel ambang berdasarkan data nyata di lapangan:
+       cubit serapat mungkin lalu baca angkanya — itulah batas bawah tangan ini.
+       Buka tangan wajar lalu baca lagi — BIDIK_ON harus di antara keduanya. */
+    const r = cubitRasio(L), p = px(L[8]);
+    ctx.font = '700 22px "JetBrains Mono",monospace';
+    ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.fillStyle = r < K.BIDIK_ON ? "#39D98A" : (r < K.TARIK_ON ? "#FFC53D" : "#6C7686");
+    ctx.fillText(r.toFixed(2), p.x + 18, p.y - 12);
   }
 }
 
