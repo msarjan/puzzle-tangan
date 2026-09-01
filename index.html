@@ -9,12 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#080A0F;
-    --film:#12161F;
-    --safelight:#FF7A1A;   /* lampu kamar gelap */
-    --emulsion:#F2EFE6;    /* teks utama */
-    --grain:#6C7686;       /* teks sekunder */
-    --fix:#39D98A;         /* selesai / benar */
+    --ink:#080A0F;          /* latar paling gelap */
+    --film:#12161F;         /* panel */
+    --garis:#242B39;        /* garis pemisah */
+    --safelight:#FF7A1A;    /* aksen utama, lampu kamar gelap */
+    --emulsion:#F2EFE6;     /* teks utama */
+    --grain:#6C7686;        /* teks sekunder */
+    --fix:#39D98A;          /* benar / selesai */
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:var(--ink);color:var(--emulsion);
@@ -24,60 +25,137 @@
   canvas{max-width:100%;max-height:100%;display:block;
     background:var(--film);border-radius:2px}
 
-  /* ---- HUD ---- */
-  .hud{position:fixed;pointer-events:none;letter-spacing:.08em;font-size:12px}
-  #status{top:0;left:0;right:0;padding:16px 18px;display:flex;gap:14px;
-    align-items:baseline;justify-content:space-between;
-    background:linear-gradient(180deg,rgba(8,10,15,.85),transparent)}
+  /* ══ HUD atas: status ringkas + indikator deteksi ══
+     Sengaja dibuat tipis. Ruang layar milik papan puzzle, bukan teks bantuan. */
+  #status{position:fixed;top:0;left:0;right:0;padding:14px 18px;
+    display:flex;gap:16px;align-items:center;justify-content:space-between;
+    pointer-events:none;font-size:12px;letter-spacing:.08em;
+    background:linear-gradient(180deg,rgba(8,10,15,.8),transparent)}
   #rec{color:var(--safelight);text-transform:uppercase;white-space:nowrap}
   #rec::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
     background:var(--safelight);margin-right:8px;vertical-align:middle;
     animation:pulse 1.6s ease-in-out infinite}
   @keyframes pulse{50%{opacity:.15}}
-  #hint{color:var(--grain);text-align:right;line-height:1.6;max-width:46ch}
-  #hint b{color:var(--emulsion);font-weight:700}
-  #keys{bottom:0;left:0;right:0;padding:14px 18px;color:var(--grain);
-    display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
-    background:linear-gradient(0deg,rgba(8,10,15,.85),transparent)}
-  #keys kbd{color:var(--emulsion);border:1px solid #2A3040;border-radius:3px;
-    padding:1px 6px;margin-right:6px}
 
-  /* ---- layar pembuka / error ---- */
-  #gate{position:fixed;inset:0;background:var(--ink);display:grid;place-items:center;
-    text-align:center;padding:32px;z-index:10;overflow:auto}
-  #gate .plate{max-width:52ch;width:100%}
-  #gate h1{font-size:clamp(28px,6vw,52px);font-weight:700;line-height:1.05;
-    letter-spacing:-.02em;margin-bottom:6px}
+  /* Indikator deteksi — menjawab "kenapa tidak jalan" tanpa perlu bertanya.
+     Pengguna langsung tahu apakah tangannya tidak terlihat, atau cubitannya
+     belum cukup rapat. */
+  #sensor{display:flex;gap:8px;align-items:center;white-space:nowrap}
+  .lampu{display:flex;gap:6px;align-items:center;color:var(--grain);
+    background:rgba(18,22,31,.72);border:1px solid var(--garis);
+    border-radius:99px;padding:5px 11px 5px 8px}
+  .lampu i{width:7px;height:7px;border-radius:50%;background:var(--garis);
+    display:block;transition:background .18s}
+  .lampu.on{color:var(--emulsion)}
+  .lampu.on i{background:var(--fix)}
+  .lampu.siaga i{background:var(--safelight)}
+
+  /* ══ Pemandu bawah: ikon gesture + satu kalimat ══
+     Di bawah tengah, dekat arah pandang saat orang melihat tangannya sendiri. */
+  #coach{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    display:flex;gap:14px;align-items:center;max-width:min(92vw,60ch);
+    background:rgba(18,22,31,.9);border:1px solid var(--garis);border-radius:14px;
+    padding:13px 20px 13px 15px;pointer-events:none;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);
+    transition:opacity .25s,transform .25s}
+  #coach.sembunyi{opacity:0;transform:translateX(-50%) translateY(10px)}
+  #coachIkon{flex:none;width:44px;height:44px;display:grid;place-items:center}
+  #coachIkon svg{width:44px;height:44px;display:block}
+  #coachTeks{font-size:13px;line-height:1.6;color:var(--emulsion);letter-spacing:.02em}
+  #coachTeks b{color:var(--safelight);font-weight:700}
+  #coachTeks small{display:block;color:var(--grain);font-size:11px;margin-top:3px;
+    letter-spacing:.05em}
+
+  /* ══ Daftar pintasan, disembunyikan sampai diminta ══ */
+  #keys{position:fixed;bottom:0;left:0;right:0;padding:12px 18px;
+    display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
+    color:var(--grain);font-size:11px;letter-spacing:.06em;pointer-events:none;
+    background:linear-gradient(0deg,rgba(8,10,15,.92),transparent)}
+  #keys[hidden]{display:none}
+  #keys kbd{color:var(--emulsion);border:1px solid var(--garis);border-radius:3px;
+    padding:1px 6px;margin-right:6px}
+  #tanya{position:fixed;right:16px;bottom:16px;width:30px;height:30px;
+    border-radius:50%;border:1px solid var(--garis);background:rgba(18,22,31,.85);
+    color:var(--grain);font:inherit;font-size:13px;cursor:pointer;z-index:5}
+  #tanya:hover{color:var(--emulsion);border-color:var(--grain)}
+
+  /* ══ Layar pembuka ══
+     Satu tombol yang menonjol. Cara main digambarkan, bukan diceritakan.
+     Semua pengaturan dilipat — orang yang cuma ingin mencoba tidak perlu
+     memutuskan apa pun sebelum melihat aplikasinya bekerja. */
+  #gate{position:fixed;inset:0;background:var(--ink);z-index:10;
+    display:grid;place-items:center;padding:28px 22px;overflow:auto}
+  .plate{width:100%;max-width:46ch;text-align:center}
+  #gate h1{font-size:clamp(30px,7vw,54px);font-weight:700;line-height:1.02;
+    letter-spacing:-.03em;margin-bottom:10px}
   #gate h1 span{color:var(--safelight)}
-  #gate p{color:var(--grain);font-size:13px;line-height:1.8;margin-bottom:24px}
-  .baris{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:12px}
-  .bidang{flex:1 1 15ch;min-width:15ch;text-align:left}
-  .bidang label{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
-    color:#3E4757;margin-bottom:5px}
-  select{font:inherit;font-size:12px;letter-spacing:.04em;width:100%;
-    color:var(--emulsion);background:var(--film);border:1px solid #2A3040;
-    border-radius:2px;padding:9px 10px}
-  #gate button{font:inherit;font-weight:700;font-size:13px;letter-spacing:.1em;
+  #gate .sub{color:var(--grain);font-size:13px;line-height:1.7;margin-bottom:26px}
+
+  .langkah{display:flex;gap:10px;margin-bottom:26px;text-align:left}
+  .langkah > div{flex:1;background:var(--film);border:1px solid var(--garis);
+    border-radius:12px;padding:14px 12px}
+  .langkah svg{width:40px;height:40px;display:block;margin-bottom:9px}
+  .langkah b{display:block;font-size:11px;letter-spacing:.06em;margin-bottom:4px}
+  .langkah p{color:var(--grain);font-size:11px;line-height:1.55}
+
+  #start{width:100%;font:inherit;font-weight:700;font-size:14px;letter-spacing:.1em;
     text-transform:uppercase;color:var(--ink);background:var(--safelight);
-    border:0;border-radius:2px;padding:14px 26px;cursor:pointer;margin-top:12px}
-  #gate button:hover{filter:brightness(1.12)}
-  #gate button:focus-visible{outline:2px solid var(--emulsion);outline-offset:3px}
-  #gate small{display:block;margin-top:20px;color:#3E4757;font-size:11px;line-height:1.7}
-  #tautanIG{display:block;margin-top:18px;color:var(--grain);font-size:11px;
-    letter-spacing:.06em;text-decoration:none;border-bottom:1px solid #2A3040;
-    padding-bottom:3px;width:fit-content;margin-left:auto;margin-right:auto}
+    border:0;border-radius:8px;padding:17px 26px;cursor:pointer;
+    transition:filter .15s,transform .08s}
+  #start:hover{filter:brightness(1.12)}
+  #start:active{transform:scale(.99)}
+  #start:focus-visible{outline:2px solid var(--emulsion);outline-offset:3px}
+  #start[disabled]{opacity:.55;cursor:progress}
+
+  details.atur{margin-top:18px;text-align:left}
+  details.atur summary{list-style:none;cursor:pointer;color:var(--grain);
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
+    padding:9px;border-radius:6px}
+  details.atur summary::-webkit-details-marker{display:none}
+  details.atur summary:hover{color:var(--emulsion)}
+  details.atur summary::after{content:" ▾"}
+  details.atur[open] summary::after{content:" ▴"}
+  .baris{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+  .bidang{flex:1 1 13ch;min-width:13ch}
+  .bidang label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    color:#3E4757;margin-bottom:5px}
+  select{font:inherit;font-size:12px;width:100%;color:var(--emulsion);
+    background:var(--ink);border:1px solid var(--garis);border-radius:6px;padding:9px 10px}
+  select:focus-visible{outline:2px solid var(--safelight);outline-offset:1px}
+
+  #tautanIG{display:block;margin-top:20px;color:var(--grain);font-size:11px;
+    letter-spacing:.05em;text-decoration:none;padding:11px;border-radius:8px;
+    border:1px solid var(--garis)}
   #tautanIG:hover{color:var(--safelight);border-color:var(--safelight)}
+  #gate small.nota{display:block;margin-top:18px;color:#3E4757;font-size:10px;line-height:1.7}
   .err{color:#E5387B}
-  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+  @media (max-width:520px){
+    .langkah{flex-direction:column}
+    .langkah > div{display:flex;gap:12px;align-items:center;padding:11px}
+    .langkah svg{margin-bottom:0;flex:none}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 
 <div id="stage"><canvas id="cv"></canvas></div>
 
-<div class="hud" id="status"><span id="rec">memuat</span><span id="hint"></span></div>
-<div class="hud" id="keys">
+<div id="status">
+  <span id="rec">memuat</span>
+  <span id="sensor">
+    <span class="lampu" id="lampuTangan"><i></i><span id="teksTangan">0 tangan</span></span>
+    <span class="lampu" id="lampuCubit"><i></i><span id="teksCubit">0 mencubit</span></span>
+  </span>
+</div>
+
+<div id="coach" class="sembunyi"><span id="coachIkon"></span><span id="coachTeks"></span></div>
+
+<button id="tanya" title="Pintasan keyboard">?</button>
+<div id="keys" hidden>
   <span><kbd>C</kbd>jepret manual</span>
+  <span><kbd>X</kbd>batal kotak</span>
   <span><kbd>3 4 5</kbd>ukuran grid</span>
   <span><kbd>T</kbd>transparansi</span>
   <span><kbd>S</kbd>simpan</span>
@@ -88,39 +166,44 @@
 
 <div id="gate"><div class="plate">
   <h1>Bidik.<br>Lalu <span>susun</span>.</h1>
-  <p id="gatetext">Cubit jempol dan telunjuk di kedua tangan, tahan sebentar, dan kamera
-     menghitung mundur. Fotonya pecah jadi keping yang disusun ulang lewat udara —
-     bisa banyak tangan sekaligus.</p>
+  <p class="sub" id="gatetext">Foto apa pun yang kamu bingkai dengan tangan,
+     lalu susun kepingnya di udara.</p>
 
-  <div class="baris">
-    <div class="bidang"><label>Kamera</label>
-      <select id="camSelect"><option value="">kamera bawaan</option></select></div>
-  </div>
-  <div class="baris">
-    <div class="bidang"><label>Jumlah kotak</label>
-      <select id="modeSelect">
-        <option value="1">1 kotak</option>
-        <option value="2">2 kotak</option>
-        <option value="3">3 kotak</option>
-      </select></div>
-    <div class="bidang"><label>Grid</label>
-      <select id="gridSelect">
-        <option value="3">3 × 3</option>
-        <option value="4">4 × 4</option>
-        <option value="5">5 × 5</option>
-      </select></div>
-    <div class="bidang"><label>Maks tangan</label>
-      <select id="handSelect">
-        <option value="2">2 tangan</option>
-        <option value="4">4 tangan</option>
-        <option value="6">6 tangan</option>
-      </select></div>
-  </div>
+  <div class="langkah" id="langkah"></div>
 
   <button id="start">Nyalakan kamera</button>
+
+  <details class="atur">
+    <summary>Pengaturan</summary>
+    <div class="baris">
+      <div class="bidang" style="flex:1 1 100%"><label>Kamera</label>
+        <select id="camSelect"><option value="">kamera bawaan</option></select></div>
+    </div>
+    <div class="baris">
+      <div class="bidang"><label>Jumlah kotak</label>
+        <select id="modeSelect">
+          <option value="1">1 kotak</option>
+          <option value="2">2 kotak</option>
+          <option value="3">3 kotak</option>
+        </select></div>
+      <div class="bidang"><label>Grid</label>
+        <select id="gridSelect">
+          <option value="3">3 × 3</option>
+          <option value="4">4 × 4</option>
+          <option value="5">5 × 5</option>
+        </select></div>
+      <div class="bidang"><label>Maks tangan</label>
+        <select id="handSelect">
+          <option value="2">2 tangan</option>
+          <option value="4">4 tangan</option>
+          <option value="6">6 tangan</option>
+        </select></div>
+    </div>
+  </details>
+
   <a id="tautanIG" href="#" target="_blank" rel="noopener" style="display:none"></a>
-  <small>Kamera diproses sepenuhnya di perangkat ini. Tidak ada video yang dikirim ke mana pun.<br>
-  Butuh koneksi saat pertama dibuka untuk mengunduh model deteksi.</small>
+  <small class="nota">Kamera diproses sepenuhnya di perangkat ini.
+    Tidak ada video atau foto yang dikirim ke mana pun.</small>
 </div></div>
 
 <script type="module">
@@ -147,7 +230,8 @@ const K = {
   JARAK_COCOK:     0.22,   // × lebar layar. Perpindahan wajar satu tangan per frame.
                            //   terlalu kecil → satu tangan terus dianggap penunjuk baru
                            //   terlalu besar → dua tangan berdekatan bisa tertukar
-  HILANG_FRAME:    8,      // tangan boleh hilang sekian frame sebelum penunjuknya dibuang
+  HILANG_TANGAN:   8,      // frame kamera tangan boleh hilang sebelum penunjuknya dibuang
+  HILANG_MS:       250,    // ms kotak boleh kehilangan pasangannya sebelum dibuang
 
   JEJAK:           5,      // titik jatuh diambil dari sekian frame lalu
 
@@ -160,14 +244,15 @@ const K = {
                            //   kotak bisa dibuat sebesar seluruh layar.
                            //   Turunkan kalau tangan antar orang sering tertukar.
   COCOK_KOTAK:     0.25,   // × lebar layar. Perpindahan wajar titik tengah kotak per frame.
-  TAHAN_BIDIK:     90,     // frame kedua cubitan harus ditahan (±1,5 detik di 60fps)
-  LUNTUR_BIDIK:    4,      // pengurangan progres per frame saat cubitan lepas
+  TAHAN_BIDIK:     1500,   // ms kedua cubitan harus ditahan
+  LUNTUR_BIDIK:    4,      // pengali kemunduran saat cubitan lepas (4× lebih cepat mundur)
   HITUNG_MUNDUR:   3,      // detik, jeda untuk menurunkan tangan sebelum jepret
   JEDA_JEPRET:     1400,   // ms menampilkan foto utuh sebelum pecah jadi keping
   MAKS_KOTAK:      3,      // lebih dari ini kepingnya terlalu kecil untuk dicubit
 
   // menyimpan
-  TAHAN_SIMPAN:    45,     // frame telapak terbuka harus ditahan
+  TAHAN_SIMPAN:    750,    // ms telapak terbuka harus ditahan
+  LUNTUR_SIMPAN:   3,      // pengali kemunduran saat telapak diturunkan
 
   // tata letak
   MARGIN_X:        0.94,   // porsi lebar layar yang boleh dipakai papan
@@ -193,12 +278,20 @@ const WARNA = ["#E5387B", "#39D98A", "#4EA8FF", "#FFC53D", "#B36BFF", "#FF7A1A"]
 
 /* ══ elemen & state ══════════════════════════════════════ */
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-const recEl = document.getElementById("rec"), hintEl = document.getElementById("hint");
+const recEl = document.getElementById("rec");
+const coachEl = document.getElementById("coach");
+const coachIkon = document.getElementById("coachIkon");
+const coachTeks = document.getElementById("coachTeks");
+const lampuTangan = document.getElementById("lampuTangan");
+const lampuCubit  = document.getElementById("lampuCubit");
+const teksTangan  = document.getElementById("teksTangan");
+const teksCubit   = document.getElementById("teksCubit");
 const gate = document.getElementById("gate"), gateText = document.getElementById("gatetext");
 const camSelect  = document.getElementById("camSelect");
 const modeSelect = document.getElementById("modeSelect");
 const gridSelect = document.getElementById("gridSelect");
 const handSelect = document.getElementById("handSelect");
+const tombolMulai = document.getElementById("start");
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true;
 
@@ -215,9 +308,12 @@ let iAlpha = K.ALPHA_AWAL; // indeks transparansi keping, digilir dengan tombol 
 const alphaPapan = () => K.ALPHA_PILIHAN[iAlpha];
 
 let countStart = 0, shotStart = 0;
+let dt = 16;               // ms sejak frame gambar sebelumnya
 
 let papan = [];            // [{ foto, urutan[] }] — satu elemen = satu puzzle
-let palmFrames = 0, saveArmed = true, savedFlash = 0;
+let tahanSimpan = 0, saveArmed = true, savedFlash = 0;   // tahanSimpan dalam ms
+let pesanSesaat = "", pesanSampai = 0;                   // pesan singkat di pemandu
+let waktuSelesai = 0;      // penanda animasi perayaan saat puzzle selesai
 
 /* ══ util geometri ═══════════════════════════════════════ */
 const d = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
@@ -231,7 +327,14 @@ function isOpenPalm(L){
 
 // landmark → koordinat kanvas (video digambar mirror, jadi x dibalik)
 const px = p => ({ x:(1-p.x)*W, y:p.y*H });
-const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const esc = s => String(s).replace(/[<>&"]/g,
+  c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+/* Ukuran teks di kanvas harus ikut resolusi kamera, bukan piksel tetap.
+   Kanvas mengambil ukuran video, jadi teks 20px terlihat wajar di 720p
+   tapi mengecil separuh di 1440p. */
+const fontKanvas = (bagian, tebal = 700) =>
+  `${tebal} ${Math.round(H * bagian)}px "JetBrains Mono",monospace`;
 
 /* ══════════════════════════════════════════════════════════════
    PENUNJUK — satu per tangan, identitasnya dilacak antar frame
@@ -286,15 +389,38 @@ function lacakTangan(hands){
   for (const id of belum){
     const q = penunjuk.get(id);
     q.cubit = false; q.bidik = false;          // dianggap melepas
-    if (++q.hilang > K.HILANG_FRAME){
+    if (++q.hilang > K.HILANG_TANGAN){
       lepasUbin(q);                           // kembalikan keping yang sempat diangkat
       penunjuk.delete(id);
     }
   }
 }
 
+/* ══ layar pembuka ═══════════════════════════════════════ */
+
+/* Tiga langkah cara main, digambarkan bukan diceritakan. Ikonnya sama persis
+   dengan yang muncul di pemandu saat aplikasi berjalan, supaya pengguna
+   mengenali bentuk yang sama dua kali.
+   Dipanggil di akhir berkas — IKON dideklarasikan setelah bagian ini. */
+function gambarLangkah(){
+  document.getElementById("langkah").innerHTML = [
+    ["kotak",   "Bingkai",  "Cubit jempol dan telunjuk di kedua tangan, tahan sebentar."],
+    ["tarik",   "Susun",    "Fotonya pecah jadi keping. Cubit untuk memindahkannya."],
+    ["telapak", "Simpan",   "Buka telapak tangan dan tahan untuk mengunduh hasilnya."]
+  ].map(([ikon, judul, isi]) =>
+    `<div style="color:var(--safelight)">${IKON[ikon]}<b>${judul}</b><p>${isi}</p></div>`
+  ).join("");
+}
+
 /* ══ boot ════════════════════════════════════════════════ */
-document.getElementById("start").addEventListener("click", boot);
+tombolMulai.addEventListener("click", boot);
+
+/* Tombol ? membuka daftar pintasan. Disembunyikan secara asali supaya
+   pengguna pertama kali tidak dibanjiri pilihan. */
+const keysEl = document.getElementById("keys");
+document.getElementById("tanya").addEventListener("click", () => {
+  keysEl.hidden = !keysEl.hidden;
+});
 
 /* Tautan Instagram hanya muncul kalau TAUTAN_IG diisi di KONFIG di atas. */
 if (TAUTAN_IG){
@@ -303,6 +429,7 @@ if (TAUTAN_IG){
 }
 
 async function boot(){
+  tombolMulai.disabled = true;
   try{
     N           = parseInt(gridSelect.value, 10);
     jumlahKotak = Math.min(K.MAKS_KOTAK, parseInt(modeSelect.value, 10));
@@ -326,19 +453,30 @@ async function boot(){
     // ditentukan oleh jumlah kotak. Pilihan pengguna hanya boleh menaikkan.
     const jumlahTangan = Math.max(parseInt(handSelect.value, 10), jumlahKotak * 2);
 
-    landmarker = await HandLandmarker.createFromOptions(berkasVisi, {
+    const buatLandmarker = delegate => HandLandmarker.createFromOptions(berkasVisi, {
       baseOptions:{
         modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-        delegate:"GPU" },
+        delegate },
       numHands: jumlahTangan,
       runningMode:"VIDEO",
       minHandDetectionConfidence:0.5, minTrackingConfidence:0.5
     });
 
+    // Sebagian perangkat menolak akses GPU dari browser. Tanpa cadangan CPU,
+    // aplikasi gagal total di layar pembuka — tidak bisa diterima untuk rilis umum.
+    try {
+      landmarker = await buatLandmarker("GPU");
+    } catch(gpuGagal){
+      gateText.textContent = "GPU tidak tersedia, memakai CPU…";
+      landmarker = await buatLandmarker("CPU");
+    }
+
     gate.style.display = "none";
     state = S.AIM;
     requestAnimationFrame(loop);
   }catch(e){
+    tombolMulai.disabled = false;
+    tombolMulai.textContent = "Coba lagi";
     gateText.innerHTML = '<span class="err">Kamera atau model gagal dimuat.</span><br>' +
       esc(e.message || e) +
       "<br><br>Halaman ini harus dibuka lewat https:// atau localhost agar browser mengizinkan kamera. " +
@@ -362,17 +500,35 @@ async function startStream(deviceId){
   cv.width = W; cv.height = H;
 }
 
-/* ══ loop utama ══════════════════════════════════════════ */
+/* ══ loop utama ══════════════════════════════════════════
+   Dua kecepatan berbeda harus dipisah:
+   - menggambar jalan secepat layar (biasanya 60fps)
+   - deteksi tangan hanya punya data baru secepat kamera (sering 30fps)
+
+   Kalau logika gesture ikut kecepatan gambar, tangan yang sama diproses dua kali
+   untuk satu frame kamera: progres tahan naik dua kali lipat dan jejak posisi
+   jadi setengah lebih pendek dari yang diniatkan. Karena itu lacakTangan() hanya
+   dipanggil saat benar-benar ada frame kamera baru, sedangkan hitungan tahan
+   memakai selisih waktu (ms) supaya sama di semua perangkat. */
+let waktuLalu = performance.now();
+
 function loop(){
   requestAnimationFrame(loop);
   if (video.readyState < 2) return;
 
-  let hands = lastHands;
+  const kini = performance.now();
+  dt = Math.min(100, kini - waktuLalu);   // dibatasi, supaya tab yang lama tidak aktif
+  waktuLalu = kini;                       // tidak melompat jauh saat kembali dibuka
+
   if (video.currentTime !== lastVideoTime){
     lastVideoTime = video.currentTime;
-    hands = (landmarker.detectForVideo(video, performance.now()).landmarks) || [];
-    lastHands = hands;
+    lastHands = (landmarker.detectForVideo(video, kini).landmarks) || [];
+    lacakTangan(lastHands);               // hanya saat ada data kamera baru
+
+    // indikator deteksi: berapa terlihat, berapa yang cubitannya sudah cukup rapat
+    setSensor(lastHands.length, lastHands.filter(L => cubitRasio(L) < K.BIDIK_ON).length);
   }
+  const hands = lastHands;
 
   ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
   ctx.drawImage(video,0,0,W,H); ctx.restore();
@@ -381,7 +537,7 @@ function loop(){
     ctx.fillStyle = "rgba(8,10,15,.28)"; ctx.fillRect(0,0,W,H);
   }
 
-  if (state === S.AIM)   aim(hands);
+  if (state === S.AIM)   aim();
   if (state === S.COUNT) count();
   if (state === S.SHOT)  shot();
   if (state === S.PUZZLE || state === S.DONE) puzzle(hands);
@@ -432,11 +588,8 @@ const kotakHidup = new Map();
 let idKotak = 0;
 let kotakKunci = [];        // kotak yang sudah selesai ditahan, menunggu yang lain
 
-function aim(hands){
-  // Pelacak tangan yang sama dipakai di tahap menyusun — identitas tangan terjaga
-  // dan status cubitannya sudah lewat histeresis, jadi progres tahan tidak
-  // mundur hanya karena satu frame meleset.
-  lacakTangan(hands);
+function aim(){
+  // Pelacakan tangan sudah dilakukan di loop utama saat ada frame kamera baru.
   const titik = [...penunjuk.values()]
     .filter(q => q.bidik && q.id !== "mouse")
     .map(q => ({ x:q.x, y:q.y }));
@@ -463,7 +616,7 @@ function aim(hands){
 
     k.r = r; k.pusat = pusat; k.sudut = sudut; k.hilang = 0;
     if (!k.terkunci){
-      k.maju = Math.min(K.TAHAN_BIDIK, k.maju + 1);
+      k.maju = Math.min(K.TAHAN_BIDIK, k.maju + dt);
       // selesai ditahan → kotak dikunci, pemiliknya boleh menurunkan tangan
       if (k.maju >= K.TAHAN_BIDIK && kotakKunci.length < jumlahKotak){
         kotakKunci.push({ ...r });
@@ -475,14 +628,16 @@ function aim(hands){
   // kotak yang pasangannya tidak terlihat frame ini
   for (const id of belum){
     const k = kotakHidup.get(id);
-    k.maju = Math.max(0, k.maju - K.LUNTUR_BIDIK);
-    if (++k.hilang > K.HILANG_FRAME && (k.maju === 0 || k.terkunci)) kotakHidup.delete(id);
+    k.maju = Math.max(0, k.maju - dt*K.LUNTUR_BIDIK);
+    k.hilang += dt;
+    if (k.hilang > K.HILANG_MS && (k.maju === 0 || k.terkunci)) kotakHidup.delete(id);
   }
 
-  // gambar: kotak terkunci dulu, lalu yang masih dibidik
+  // gambar: kotak terkunci dulu, lalu yang masih dibidik, lalu kotak dari mouse
   for (const r of kotakKunci) gambarKotak(r, [], 1, true);
   for (const k of kotakHidup.values())
     if (!k.terkunci) gambarKotak(k.r, k.sudut, k.maju / K.TAHAN_BIDIK, false);
+  if (kotakMouse) gambarKotak(persegiMouse(), [], 1, false);
 
   if (kotakKunci.length >= jumlahKotak){
     state = S.COUNT; countStart = performance.now();
@@ -491,12 +646,40 @@ function aim(hands){
   }
 
   const sisa = jumlahKotak - kotakKunci.length;
+  const adaYangDibidik = [...kotakHidup.values()].some(k => !k.terkunci && k.maju > 0);
+  const cubitTerlihat = titik.length;
+
+  /* Bantuan bertingkat: pesan menyesuaikan sejauh mana pengguna sudah berhasil,
+     bukan satu kalimat yang sama terus. Orang yang tangannya belum terlihat
+     butuh saran berbeda dari orang yang sudah mencubit tapi kotaknya kekecilan. */
+  let ikon = "cubit", teks;
+  if (adaYangDibidik){
+    ikon = "tahan";
+    teks = "Tahan cubitanmu sampai lingkaran penuh." +
+           "<small>Kotaknya ikut bergerak — atur dulu sebelum menahan.</small>";
+  } else if (cubitTerlihat >= 2){
+    ikon = "kotak";
+    teks = "Renggangkan kedua tangan untuk memperbesar kotak." +
+           "<small>Kotak terlalu kecil belum dihitung.</small>";
+  } else if (cubitTerlihat === 1){
+    ikon = "cubit";
+    teks = "Satu tangan sudah terbaca. <b>Cubit dengan tangan satunya.</b>";
+  } else if (lastHands.length > 0){
+    ikon = "cubit";
+    teks = "Pertemukan <b>jempol dan telunjuk</b> di kedua tangan." +
+           "<small>Rapatkan sampai benar-benar bersentuhan.</small>";
+  } else {
+    ikon = "cubit";
+    teks = "Angkat kedua tangan supaya terlihat kamera." +
+           "<small>Mundur sedikit kalau tangan terpotong di tepi layar.</small>";
+  }
+
+  if (kotakKunci.length && sisa > 0)
+    teks = `Kotak terkunci. <b>Menunggu ${sisa} kotak lagi.</b>` +
+           "<small>Giliran orang berikutnya membingkai.</small>";
+
   setHud(kotakKunci.length ? `terkunci ${kotakKunci.length}/${jumlahKotak}` : "membidik",
-    jumlahKotak > 1
-      ? `Cubit jempol dan telunjuk di kedua tangan, tahan sampai lingkaran penuh. ` +
-        `Menunggu <b>${sisa}</b> kotak lagi.`
-      : "Cubit jempol dan telunjuk di <b>kedua tangan</b> — dua titik itu jadi sudut kotak, " +
-        "tahan sampai lingkaran penuh.");
+         teks, ikon);
 }
 
 /* Kotak bidik: sisi penuh mengikuti bentuk cubitan, sudut dipertebal, dan
@@ -534,14 +717,15 @@ function gambarKotak(r, sudut, maju, terkunci){
      mentah saat menyetel di kelas dengan resolusi kamera berbeda-beda. */
   const persen = Math.round((r.w * r.h) / (W * H) * 100);
   const label = `${Math.round(r.w)} × ${Math.round(r.h)} · ${persen}% layar`;
-  ctx.font = '700 20px "JetBrains Mono",monospace';
+  ctx.font = fontKanvas(0.028);
+  const tinggiTeks = Math.round(H * 0.028);
   ctx.textAlign = "left";
-  const diAtas = r.y > 34;                      // kalau mepet atas, taruh di dalam kotak
+  const diAtas = r.y > tinggiTeks * 1.7;        // kalau mepet atas, taruh di dalam kotak
   ctx.textBaseline = diAtas ? "bottom" : "top";
-  const ty = diAtas ? r.y - 10 : r.y + 10;
+  const ty = diAtas ? r.y - tinggiTeks*0.5 : r.y + tinggiTeks*0.5;
   ctx.fillStyle = "rgba(8,10,15,.65)";          // alas gelap supaya terbaca di latar ramai
   const lebar = ctx.measureText(label).width;
-  ctx.fillRect(r.x - 4, diAtas ? ty - 20 : ty - 2, lebar + 10, 24);
+  ctx.fillRect(r.x - 4, diAtas ? ty - tinggiTeks : ty - 2, lebar + 10, tinggiTeks + 6);
   ctx.fillStyle = warna;
   ctx.fillText(label, r.x + 1, diAtas ? ty - 1 : ty + 1);
 
@@ -557,11 +741,11 @@ function count(){
   const n = Math.ceil(sisa), t = 1 - (n - sisa);
   ctx.save();
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `700 ${Math.round(H*0.34)}px "JetBrains Mono",monospace`;
+  ctx.font = fontKanvas(0.34);
   ctx.fillStyle = `rgba(255,122,26,${0.25 + 0.6*(1-t)})`;
   ctx.fillText(n, W/2, H/2);
   ctx.restore();
-  setHud("hitung mundur", "Tahan pose.");
+  setHud("hitung mundur", "Turunkan tangan — kamera memotret sebentar lagi.", "tunggu");
 }
 
 /* Menyalin frame video ke kanvas dalam orientasi mirror, supaya koordinat kotak
@@ -600,14 +784,23 @@ function capture(){
   papan = foto.map(f => ({ foto:f, urutan:acak() }));
   penunjuk.clear(); kotakKunci = []; kotakHidup.clear();
   savedFlash = 1; shotStart = performance.now();
-  palmFrames = 0; saveArmed = true;
+  tahanSimpan = 0; saveArmed = true;
   state = S.SHOT;
 }
 
+/* Fisher–Yates: pengacakan merata.
+   sort(() => Math.random()-0.5) TERLIHAT mengacak tapi hasilnya berat sebelah —
+   makin banyak keping makin kentara, dan sebagian keping cenderung mulai
+   dekat posisi benarnya. Puzzle memakai tukar posisi, bukan geser, jadi
+   semua permutasi selalu bisa diselesaikan. */
 function acak(){
-  let a;
-  do { a = [...Array(N*N).keys()].sort(() => Math.random()-0.5); }
-  while (a.every((v,i) => v === i));
+  const a = [...Array(N*N).keys()];
+  do {
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+  } while (a.every((v,i) => v === i));    // jangan mulai dari keadaan sudah selesai
   return a;
 }
 
@@ -621,8 +814,9 @@ function shot(){
     ctx.strokeRect(g.x-5, g.y-5, g.sisi+10, g.sisi+10);
   });
   setHud("terjepret",
-    papan.length > 1 ? `${papan.length} kotak — satu puzzle untuk masing-masing.`
-                     : "Bersiap menyusun…");
+    papan.length > 1
+      ? `${papan.length} kotak terpotret — satu puzzle untuk masing-masing.`
+      : "Bersiap menyusun…", "tunggu");
   if (performance.now() - shotStart > K.JEDA_JEPRET) state = S.PUZZLE;
 }
 
@@ -681,6 +875,11 @@ function ambilUbin(q){
   pap.urutan[hit.s] = -1;
 }
 
+/* Denyut saat sebuah keping mendarat di posisi yang benar.
+   Umpan balik ini penting justru karena aplikasi dipakai tanpa penjelasan:
+   pengguna butuh tanda bahwa yang barusan dilakukan itu benar. */
+const denyut = [];          // [{ papan, slot, umur }]
+
 function lepasUbin(q){
   if (q.ubin < 0) return;
   const pap = papan[q.papan];
@@ -690,14 +889,37 @@ function lepasUbin(q){
   // posisi tangan sudah bergeser mengikuti refleks itu
   const titik = q.jejak[0] || { x:q.x, y:q.y };
   const tujuan = slotTerdekat(q.papan, titik);
+  const iPapan = q.papan;
 
   if (tujuan !== q.dari && pap.urutan[tujuan] >= 0){
     pap.urutan[q.dari] = pap.urutan[tujuan];  // tukar posisi
     pap.urutan[tujuan] = q.ubin;
+    // keping yang baru saja jatuh tepat, dan keping yang tergeser jadi tepat
+    if (pap.urutan[tujuan] === tujuan) denyut.push({ papan:iPapan, slot:tujuan, umur:0 });
+    if (pap.urutan[q.dari] === q.dari)  denyut.push({ papan:iPapan, slot:q.dari, umur:0 });
   } else {
     pap.urutan[q.dari] = q.ubin;              // kembalikan ke tempat semula
   }
   q.ubin = -1; q.papan = -1; q.dari = -1;
+}
+
+/* Menggambar denyut yang sedang berjalan, lalu membuang yang sudah selesai. */
+const DENYUT_MS = 420;
+function gambarDenyut(){
+  for (let i = denyut.length - 1; i >= 0; i--){
+    const dn = denyut[i];
+    dn.umur += dt;
+    if (dn.umur > DENYUT_MS || !papan[dn.papan]){ denyut.splice(i,1); continue; }
+
+    const g = geo(dn.papan), t = dn.umur / DENYUT_MS;
+    const x = g.x + (dn.slot % N)*g.sel, y = g.y + Math.floor(dn.slot / N)*g.sel;
+    const tumbuh = g.sel * 0.13 * t;
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 3;
+    ctx.strokeRect(x - tumbuh, y - tumbuh, g.sel + tumbuh*2, g.sel + tumbuh*2);
+    ctx.restore();
+  }
 }
 
 const papanSelesai = pap => pap.urutan.every((v,i) => v === i);
@@ -716,9 +938,11 @@ function puzzle(hands){
   /* Status selesai harus bisa dibatalkan. Kalau keping digeser lagi setelah
      puzzle sempat benar, gesture simpan wajib mati — kalau tidak, telapak
      terbuka akan menyimpan susunan yang sudah teracak ulang. */
-  if (state === S.PUZZLE && semuaSelesai()) state = S.DONE;
+  if (state === S.PUZZLE && semuaSelesai()){
+    state = S.DONE; waktuSelesai = performance.now();
+  }
   else if (state === S.DONE && !semuaSelesai()){
-    state = S.PUZZLE; palmFrames = 0; saveArmed = true;
+    state = S.PUZZLE; tahanSimpan = 0; saveArmed = true; waktuSelesai = 0;
   }
 
   // papan dan keping yang sedang diam
@@ -739,6 +963,8 @@ function puzzle(hands){
     }
   });
 
+  gambarDenyut();
+
   // keping yang sedang diangkat + kursor tiap tangan
   for (const q of penunjuk.values()){
     const warna = WARNA[(typeof q.id === "number" ? q.id : 0) % WARNA.length];
@@ -753,19 +979,47 @@ function puzzle(hands){
   }
 
   if (state === S.DONE) selesai(hands);
-  else setHud(`menyusun · ${N}×${N}` + (papan.length > 1 ? ` · ${papan.length} papan` : ""),
-    "Cubit jempol dan telunjuk untuk menarik keping, lepas untuk menukar. " +
-    "Beberapa tangan bisa menyusun bersamaan.");
+  else {
+    const benar = papan.reduce((n,p) => n + p.urutan.filter((v,i) => v === i).length, 0);
+    const total = papan.length * N * N;
+    setHud(`menyusun · ${benar}/${total} benar`,
+      "<b>Cubit</b> untuk mengangkat keping, <b>lepas</b> di tempat tujuan untuk menukar." +
+      (papan.length > 1 ? "<small>Beberapa orang bisa menyusun bersamaan.</small>"
+                        : "<small>Keping yang sudah benar bergaris hijau.</small>"),
+      "tarik");
+  }
 }
 
 function selesai(hands){
   // Telapak terbuka ditahan → simpan. Harus dilepas dulu sebelum bisa memicu lagi,
   // kalau tidak satu telapak terbuka menghasilkan berkas berulang-ulang.
-  if (hands.some(isOpenPalm)) palmFrames = Math.min(K.TAHAN_SIMPAN + 15, palmFrames + 1);
-  else { palmFrames = Math.max(0, palmFrames - 3); if (palmFrames === 0) saveArmed = true; }
+  if (hands.some(isOpenPalm)) tahanSimpan = Math.min(K.TAHAN_SIMPAN, tahanSimpan + dt);
+  else {
+    tahanSimpan = Math.max(0, tahanSimpan - dt*K.LUNTUR_SIMPAN);
+    if (tahanSimpan === 0) saveArmed = true;
+  }
 
-  const p = saveArmed ? Math.min(1, palmFrames / K.TAHAN_SIMPAN) : 0;
+  const p = saveArmed ? Math.min(1, tahanSimpan / K.TAHAN_SIMPAN) : 0;
   if (saveArmed && p >= 1){ save(); saveArmed = false; }
+
+  /* Perayaan singkat saat baru selesai: cincin hijau melebar dari tiap papan.
+     Menandai dengan jelas bahwa puzzle sudah benar, sebelum pengguna diminta
+     melakukan gesture berikutnya. */
+  const RAYA_MS = 900;
+  if (waktuSelesai){
+    const t = (performance.now() - waktuSelesai) / RAYA_MS;
+    if (t >= 1) waktuSelesai = 0;
+    else {
+      ctx.save();
+      ctx.globalAlpha = (1 - t) * 0.9;
+      ctx.strokeStyle = "#39D98A"; ctx.lineWidth = 5;
+      papan.forEach((_,i) => {
+        const g = geo(i), tumbuh = g.sisi * 0.09 * t;
+        ctx.strokeRect(g.x - tumbuh, g.y - tumbuh, g.sisi + tumbuh*2, g.sisi + tumbuh*2);
+      });
+      ctx.restore();
+    }
+  }
 
   if (p > 0){
     const lebar = W * 0.6;
@@ -775,8 +1029,12 @@ function selesai(hands){
     ctx.stroke();
   }
   setHud(saveArmed ? "tersusun" : "tersimpan",
-    saveArmed ? "Buka telapak tangan dan tahan untuk menyimpan."
-              : "Turunkan tangan. Tekan <b>R</b> untuk memotret lagi.");
+    saveArmed
+      ? "Selesai! <b>Buka telapak tangan</b> dan tahan untuk menyimpan fotonya." +
+        "<small>Atau tekan S di keyboard.</small>"
+      : "Tersimpan ke folder unduhan." +
+        "<small>Tekan R untuk memotret lagi.</small>",
+    saveArmed ? "telapak" : "jempol");
 }
 
 function ubin(foto, idx, x, y, size, src, tepi, angkat){
@@ -818,14 +1076,101 @@ function save(){
   savedFlash = 1;
 }
 
-/* ══ HUD, titik tangan, kontrol cadangan ═════════════════ */
-let pesanSesaat = "", pesanSampai = 0;
+/* ══ HUD, pemandu, titik tangan, kontrol cadangan ════════ */
 
-function setHud(status, hint){
-  // pesan sesaat (misal perubahan transparansi) menimpa petunjuk biasa sebentar
-  if (pesanSesaat && performance.now() < pesanSampai) hint = pesanSesaat;
+/* Ikon gesture. Bentuk tangan lebih cepat dipahami daripada kalimat —
+   penting karena aplikasi ini dipakai tanpa ada yang menjelaskan.
+   Digambar sebagai garis sederhana, bukan siluet realistis, supaya tetap
+   terbaca di ukuran kecil. */
+const IKON = {
+  cubit: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 26c-3-3-5-7-5-11a4 4 0 0 1 8 0v6"/>
+    <path d="M31 26c3-3 5-7 5-11a4 4 0 0 0-8 0v6"/>
+    <path d="M20 21v14a6 6 0 0 0 6 6h1a7 7 0 0 0 7-7V21"/>
+    <circle cx="20" cy="19" r="2.6" fill="currentColor" stroke="none"/>
+    <circle cx="28" cy="19" r="2.6" fill="currentColor" stroke="none"/>
+  </svg>`,
+
+  kotak: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 17V9h8M39 31v8h-8"/>
+    <rect x="9" y="9" width="30" height="30" rx="2" stroke-dasharray="3 5" opacity=".45"/>
+    <circle cx="9" cy="9" r="3.4" fill="currentColor" stroke="none"/>
+    <circle cx="39" cy="39" r="3.4" fill="currentColor" stroke="none"/>
+  </svg>`,
+
+  tahan: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="24" r="14" opacity=".3"/>
+    <path d="M24 10a14 14 0 0 1 12.1 7"/>
+    <circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/>
+  </svg>`,
+
+  tarik: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7" y="10" width="15" height="15" rx="2" opacity=".4"/>
+    <rect x="24" y="23" width="15" height="15" rx="2"/>
+    <path d="M20 21l7 7" stroke-dasharray="2 4"/>
+  </svg>`,
+
+  telapak: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 24v-9a2.6 2.6 0 0 1 5 0v8"/>
+    <path d="M20 22v-11a2.6 2.6 0 0 1 5 0v11"/>
+    <path d="M25 22v-9a2.6 2.6 0 0 1 5 0v10"/>
+    <path d="M30 24v-6a2.6 2.6 0 0 1 5 0v13a10 10 0 0 1-10 10h-2a9 9 0 0 1-9-9v-9"/>
+  </svg>`,
+
+  jempol: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 22h6v18h-6z"/>
+    <path d="M20 24l6-13a3.5 3.5 0 0 1 6 3l-2 7h7a3 3 0 0 1 3 3.6l-2.4 11A4 4 0 0 1 33 39H20"/>
+  </svg>`,
+
+  tunggu: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="24" r="15" opacity=".35"/>
+    <path d="M24 15v9l6 4"/>
+  </svg>`
+};
+
+let coachIkonKini = "";        // hindari menulis ulang SVG tiap frame
+let coachTeksKini = "";
+
+/** Status ringkas di atas + pemandu bergambar di bawah. */
+function setHud(status, teks, ikon = "cubit"){
+  if (pesanSesaat && performance.now() < pesanSampai) teks = pesanSesaat;
   else pesanSesaat = "";
-  recEl.textContent = status; hintEl.innerHTML = hint;
+
+  recEl.textContent = status;
+
+  if (ikon && ikon !== coachIkonKini){
+    coachIkon.innerHTML = IKON[ikon] || "";
+    coachIkonKini = ikon;
+  }
+  if (teks !== coachTeksKini){
+    coachTeks.innerHTML = teks;
+    coachTeksKini = teks;
+  }
+  coachEl.classList.toggle("sembunyi", !teks);
+}
+
+/* Indikator deteksi. Ini yang menjawab "kenapa tidak jalan" tanpa perlu bertanya:
+   pengguna langsung melihat apakah tangannya belum terlihat kamera, atau sudah
+   terlihat tapi cubitannya belum cukup rapat. */
+let sensorKini = "";
+function setSensor(jumlahTangan, jumlahCubit){
+  const kunci = jumlahTangan + "|" + jumlahCubit;
+  if (kunci === sensorKini) return;
+  sensorKini = kunci;
+
+  teksTangan.textContent = `${jumlahTangan} tangan`;
+  lampuTangan.className = "lampu" + (jumlahTangan > 0 ? " on" : "");
+
+  teksCubit.textContent = `${jumlahCubit} mencubit`;
+  lampuCubit.className = "lampu" +
+    (jumlahCubit >= 2 ? " on" : (jumlahCubit === 1 ? " siaga" : ""));
 }
 
 const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
@@ -844,7 +1189,7 @@ function drawDots(hands){
        cubit serapat mungkin lalu baca angkanya — itulah batas bawah tangan ini.
        Buka tangan wajar lalu baca lagi — BIDIK_ON harus di antara keduanya. */
     const r = cubitRasio(L), p = px(L[8]);
-    ctx.font = '700 22px "JetBrains Mono",monospace';
+    ctx.font = fontKanvas(0.030);
     ctx.textAlign = "left"; ctx.textBaseline = "bottom";
     ctx.fillStyle = r < K.BIDIK_ON ? "#39D98A" : (r < K.TARIK_ON ? "#FFC53D" : "#6C7686");
     ctx.fillText(r.toFixed(2), p.x + 18, p.y - 12);
@@ -852,7 +1197,17 @@ function drawDots(hands){
 }
 
 /* Mouse dijalankan sebagai penunjuk tambahan dengan id "mouse",
-   supaya logikanya persis sama dengan tangan. */
+   supaya logikanya persis sama dengan tangan.
+   Di tahap membidik, menyeret mouse membuat kotak — jalur cadangan supaya
+   aplikasi bisa diuji tanpa harus berdiri di depan kamera. */
+let kotakMouse = null;
+
+function persegiMouse(){
+  const m = kotakMouse;
+  return { x:Math.min(m.x0,m.x1), y:Math.min(m.y0,m.y1),
+           w:Math.abs(m.x1-m.x0), h:Math.abs(m.y1-m.y0) };
+}
+
 function penunjukMouse(){
   if (!penunjuk.has("mouse")) penunjuk.set("mouse", penunjukBaru("mouse"));
   return penunjuk.get("mouse");
@@ -861,25 +1216,49 @@ const keKanvas = e => { const r = cv.getBoundingClientRect();
   return { x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height }; };
 
 cv.addEventListener("pointerdown", e => {
-  const q = penunjukMouse(), p = keKanvas(e);
+  const p = keKanvas(e);
+  if (state === S.AIM){ kotakMouse = { x0:p.x, y0:p.y, x1:p.x, y1:p.y }; return; }
+  const q = penunjukMouse();
   q.x = p.x; q.y = p.y; q.jejak = [{ x:p.x, y:p.y }]; q.cubit = true;
 });
 cv.addEventListener("pointermove", e => {
+  const p = keKanvas(e);
+  if (kotakMouse){ kotakMouse.x1 = p.x; kotakMouse.y1 = p.y; return; }
   const q = penunjuk.get("mouse"); if (!q) return;
-  const p = keKanvas(e); q.x = p.x; q.y = p.y;
+  q.x = p.x; q.y = p.y;
   q.jejak.push({ x:p.x, y:p.y }); if (q.jejak.length > K.JEJAK) q.jejak.shift();
 });
 window.addEventListener("pointerup", () => {
+  if (kotakMouse){
+    const r = persegiMouse();
+    // kotak terlalu kecil dianggap klik nyasar, bukan bidikan
+    if (r.w > W*K.MIN_KOTAK && r.h > H*K.MIN_KOTAK && kotakKunci.length < jumlahKotak)
+      kotakKunci.push(r);
+    kotakMouse = null;
+    return;
+  }
   const q = penunjuk.get("mouse"); if (q) q.cubit = false;
 });
 
 addEventListener("keydown", e => {
+  // Jangan bereaksi saat pengguna sedang memilih di dropdown dengan keyboard,
+  // dan jangan menggilir berkali-kali saat tombol ditahan.
+  if (e.repeat) return;
+  if (/^(SELECT|INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName)) return;
+
   const k = e.key.toLowerCase();
   if (k === "d") showDots = !showDots;
+  if (k === "?" || k === "/") keysEl.hidden = !keysEl.hidden;
 
   if (k === "t"){                              // gilir transparansi keping
     iAlpha = (iAlpha + 1) % K.ALPHA_PILIHAN.length;
     pesanSesaat = `Transparansi keping ${Math.round(alphaPapan()*100)}%`;
+    pesanSampai = performance.now() + 1600;
+  }
+
+  if (k === "x" && state === S.AIM && kotakKunci.length){
+    kotakKunci.pop();                          // batalkan kotak terkunci terakhir
+    pesanSesaat = "Kotak terakhir dibatalkan";
     pesanSampai = performance.now() + 1600;
   }
 
@@ -888,7 +1267,7 @@ addEventListener("keydown", e => {
     if (papan.length){
       penunjuk.clear();
       papan.forEach(p => p.urutan = acak());
-      state = S.PUZZLE; saveArmed = true; palmFrames = 0;
+      state = S.PUZZLE; saveArmed = true; tahanSimpan = 0;
     }
   }
   if (k === "c" && state === S.AIM){
@@ -898,10 +1277,13 @@ addEventListener("keydown", e => {
   if (k === "s" && papan.length) save();
   if (k === "r"){
     state = S.AIM; papan = []; penunjuk.clear();
-    kotakHidup.clear(); kotakKunci = [];
-    palmFrames = 0; saveArmed = true;
+    kotakHidup.clear(); kotakKunci = []; kotakMouse = null;
+    tahanSimpan = 0; saveArmed = true; waktuSelesai = 0; denyut.length = 0;
   }
 });
+
+/* Dijalankan paling akhir: semua yang dipakainya sudah dideklarasikan. */
+gambarLangkah();
 </script>
 </body>
 </html>
