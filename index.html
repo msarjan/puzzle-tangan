@@ -525,6 +525,12 @@ document.getElementById("tutupTanggapan").addEventListener("click", () => {
   document.getElementById("tanggapan").hidden = true;
 });
 
+// sudah mengklik tautannya berarti sudah menanggapi — jangan ditanya lagi
+document.getElementById("tautanTanggapan").addEventListener("click", () => {
+  sudahMenanggapi = true;
+  document.getElementById("tanggapan").hidden = true;
+});
+
 /* Tautan Instagram hanya muncul kalau TAUTAN_IG diisi di KONFIG di atas. */
 if (TAUTAN_IG){
   const a = document.getElementById("tautanIG");
@@ -1169,16 +1175,43 @@ function ubin(foto, idx, x, y, size, src, tepi, angkat){
 
 /* Semua papan digabung jadi satu berkas PNG — browser memblokir beberapa
    unduhan berurutan, jadi jangan disimpan satu per satu. */
-/* Ajakan tanggapan muncul sesudah berkas benar-benar tersimpan — bukan saat
-   puzzle selesai, karena saat itu pengguna masih menahan telapak tangan dan
-   pop-up justru akan mengganggu gesture yang sedang berjalan.
-   Sengaja TIDAK direset oleh tombol R: cukup sekali per sesi. */
-let tanggapanPernahMuncul = false;
+/* ══ Ajakan tanggapan ═════════════════════════════════════
+   Muncul sesudah berkas benar-benar tersimpan — bukan saat puzzle selesai,
+   karena saat itu pengguna masih menahan telapak tangan dan pop-up justru
+   akan mengganggu gesture yang sedang berjalan.
+
+   Ditampilkan pada beberapa titik, bukan sekali saja: orang yang baru pakai
+   sekali belum punya banyak yang bisa diceritakan, sedangkan yang sudah main
+   sepuluh kali jelas menikmatinya dan paling mungkin mau menanggapi.
+
+   Kalau tautannya sudah diklik, ajakan berhenti selamanya. Orang itu sudah
+   melakukan yang diminta; menanyakannya lagi hanya mengganggu.
+   Hitungan TIDAK direset oleh tombol R — satu sesi dihitung utuh. */
+const AJAKAN_PADA   = [1, 5, 10];   // penyimpanan ke berapa ajakan muncul
+const AJAKAN_ULANG  = 10;           // setelah itu, tiap kelipatan sekian
+
+let jumlahSimpan = 0;
+let sudahMenanggapi = false;
+
+function saatnyaMengajak(n){
+  if (AJAKAN_PADA.includes(n)) return true;
+  return n > Math.max(...AJAKAN_PADA) && n % AJAKAN_ULANG === 0;
+}
 
 function tampilkanTanggapan(){
-  if (!TAUTAN_IG || tanggapanPernahMuncul) return;
-  tanggapanPernahMuncul = true;
+  if (!TAUTAN_IG || sudahMenanggapi) return;
+  if (!saatnyaMengajak(jumlahSimpan)) return;
+
   const kotak = document.getElementById("tanggapan");
+  const pesan = document.getElementById("pesanTanggapan");
+
+  // nada pesan menyesuaikan seberapa sering aplikasinya dipakai
+  pesan.innerHTML = jumlahSimpan === 1
+    ? "Bagaimana pengalamanmu memakai <b>Kepingin</b>? " +
+      "Ceritakan lewat pesan — masukanmu dipakai untuk memperbaikinya."
+    : `Sudah <b>${jumlahSimpan} puzzle</b> kamu selesaikan. ` +
+      "Ada yang terasa kurang pas? Ceritakan lewat pesan.";
+
   document.getElementById("tautanTanggapan").href = TAUTAN_IG;
   kotak.hidden = false;
 }
@@ -1205,6 +1238,7 @@ function save(){
   a.href = out.toDataURL("image/png");
   a.click();
   savedFlash = 1;
+  jumlahSimpan++;
   setTimeout(tampilkanTanggapan, 1200);   // beri jeda, biar kilat simpan lewat dulu
 }
 
