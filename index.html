@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kepingin — jepret & susun lewat gerakan tangan</title>
-<meta name="description" content="Jepret apa saja di depan kamera, lalu susun kepingnya
-  lewat gerakan tangan. Berjalan penuh di perangkatmu, tanpa mengirim data ke mana pun.">
+<meta name="description" content="Jepret apa saja, susun kepingnya lewat udara.
+  Puzzle dari kameramu yang dimainkan dengan gerakan tangan. Berjalan penuh
+  di perangkatmu, tanpa mengirim data ke mana pun.">
 <meta name="theme-color" content="#F4F1EA">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -204,7 +205,7 @@
 <div id="tanggapan" hidden>
   <button id="tutupTanggapan" title="Tutup" aria-label="Tutup">×</button>
   <p>Bagaimana pengalamanmu memakai <b>Kepingin</b>?</p>
-  <a id="tautanTanggapan" href="#" target="_blank" rel="noopener">Tulis tanggapanmu</a>
+  <a id="tautanTanggapan" href="#" target="_blank" rel="noopener">Kirim tanggapan</a>
 </div>
 
 <button id="tanya" title="Pintasan keyboard">?</button>
@@ -222,8 +223,7 @@
 
 <div id="gate"><div class="plate">
   <h1>Keping<span>in</span></h1>
-  <p class="sub" id="gatetext">Jepret apa saja di depan kamera,
-     susun kepingnya lewat gerakan tangan.</p>
+  <p class="sub" id="gatetext">Jepret apa saja, susun kepingnya lewat udara.</p>
 
   <div class="langkah" id="langkah"></div>
 
@@ -334,9 +334,10 @@ const K = {
 
 /* Tautan ke postingan Instagram untuk tanggapan pengguna.
    Kosongkan ("") untuk menyembunyikan seluruh ajakan tanggapan.
-   Isi dengan URL lengkap, misal "https://www.instagram.com/p/XXXXXXXXX/" */
-const TAUTAN_IG = "";
-const TEKS_IG   = "Sudah coba? Ceritakan di postingan ini →";
+   Sementara diarahkan ke profil — ganti ke URL postingan setelah kontennya
+   terbit, misal "https://www.instagram.com/p/XXXXXXXXX/" */
+const TAUTAN_IG = "https://www.instagram.com/sarjan.eth/";
+const TEKS_IG   = "Sudah coba? Kirim tanggapanmu →";
 
 /* warna penunjuk — tiap tangan dapat warna berbeda supaya jelas siapa pegang apa */
 const WARNA = ["#E5387B", "#39D98A", "#4EA8FF", "#FFC53D", "#B36BFF", "#FF7A1A"];
