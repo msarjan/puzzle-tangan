@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bidik &amp; Susun — kamera gestur</title>
+<title>Kepingin — jepret & susun lewat gerakan tangan</title>
+<meta name="description" content="Jepret apa saja di depan kamera, lalu susun kepingnya
+  lewat gerakan tangan. Berjalan penuh di perangkatmu, tanpa mengirim data ke mana pun.">
+<meta name="theme-color" content="#F4F1EA">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -93,6 +96,27 @@
   #keys[hidden]{display:none}
   #keys kbd{color:var(--emulsion);border:1px solid var(--garis);border-radius:3px;
     padding:1px 6px;margin-right:6px}
+  /* Kotak tanggapan. Muncul di pojok, tidak menutup hasil puzzle — justru
+     hasil yang masih terlihat itu yang membuat orang mau bercerita.
+     Hanya sekali per sesi, dan selalu bisa ditutup. */
+  #tanggapan{position:fixed;right:16px;top:64px;z-index:6;width:min(30ch,80vw);
+    background:var(--panel);border:1px solid var(--garis);border-radius:14px;
+    padding:16px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.35);
+    animation:masuk .3s ease-out}
+  #tanggapan[hidden]{display:none}
+  @keyframes masuk{from{opacity:0;transform:translateY(-8px)}}
+  #tanggapan p{font-size:12.5px;line-height:1.6;color:var(--emulsion);margin-bottom:12px;
+    padding-right:18px}
+  #tanggapan p b{color:var(--safelight)}
+  #tanggapan a{display:block;text-align:center;font-weight:700;font-size:12px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
+    background:var(--safelight);border-radius:8px;padding:12px;text-decoration:none}
+  #tanggapan a:hover{filter:brightness(1.1)}
+  #tutupTanggapan{position:absolute;top:8px;right:9px;width:24px;height:24px;
+    border:0;background:none;color:var(--grain);font:inherit;font-size:17px;
+    line-height:1;cursor:pointer;border-radius:6px}
+  #tutupTanggapan:hover{color:var(--emulsion)}
+
   #tanya{position:fixed;right:16px;bottom:16px;width:30px;height:30px;
     border-radius:50%;border:1px solid var(--garis);background:var(--panel);
     color:var(--grain);font:inherit;font-size:13px;cursor:pointer;z-index:5}
@@ -105,10 +129,11 @@
   #gate{position:fixed;inset:0;background:var(--ink);z-index:10;
     display:grid;place-items:center;padding:28px 22px;overflow:auto}
   .plate{width:100%;max-width:46ch;text-align:center}
-  #gate h1{font-size:clamp(30px,7vw,54px);font-weight:700;line-height:1.02;
-    letter-spacing:-.03em;margin-bottom:10px}
+  #gate h1{font-size:clamp(38px,9vw,64px);font-weight:700;line-height:1;
+    letter-spacing:-.04em;margin-bottom:12px}
   #gate h1 span{color:var(--safelight)}
-  #gate .sub{color:var(--grain);font-size:13px;line-height:1.7;margin-bottom:26px}
+  #gate .sub{color:var(--grain);font-size:14px;line-height:1.7;margin-bottom:28px;
+    max-width:34ch;margin-left:auto;margin-right:auto}
 
   .langkah{display:flex;gap:10px;margin-bottom:26px;text-align:left}
   .langkah > div{flex:1;background:var(--film);border:1px solid var(--garis);
@@ -176,6 +201,12 @@
 
 <div id="coach" class="sembunyi"><span id="coachIkon"></span><span id="coachTeks"></span></div>
 
+<div id="tanggapan" hidden>
+  <button id="tutupTanggapan" title="Tutup" aria-label="Tutup">×</button>
+  <p>Bagaimana pengalamanmu memakai <b>Kepingin</b>?</p>
+  <a id="tautanTanggapan" href="#" target="_blank" rel="noopener">Tulis tanggapanmu</a>
+</div>
+
 <button id="tanya" title="Pintasan keyboard">?</button>
 <div id="keys">
   <span><kbd>C</kbd>jepret manual</span>
@@ -190,9 +221,9 @@
 </div>
 
 <div id="gate"><div class="plate">
-  <h1>Bidik.<br>Lalu <span>susun</span>.</h1>
-  <p class="sub" id="gatetext">Foto apa pun yang kamu bingkai dengan tangan,
-     lalu susun kepingnya di udara.</p>
+  <h1>Keping<span>in</span></h1>
+  <p class="sub" id="gatetext">Jepret apa saja di depan kamera,
+     susun kepingnya lewat gerakan tangan.</p>
 
   <div class="langkah" id="langkah"></div>
 
@@ -301,7 +332,8 @@ const K = {
                            //   latar terlalu ramai sampai keping susah dilihat.
 };
 
-/* Tautan ke postingan Instagram. Kosongkan ("") untuk menyembunyikan.
+/* Tautan ke postingan Instagram untuk tanggapan pengguna.
+   Kosongkan ("") untuk menyembunyikan seluruh ajakan tanggapan.
    Isi dengan URL lengkap, misal "https://www.instagram.com/p/XXXXXXXXX/" */
 const TAUTAN_IG = "";
 const TEKS_IG   = "Sudah coba? Ceritakan di postingan ini →";
@@ -486,6 +518,10 @@ temaSelect.addEventListener("change", () => pakaiTema(temaSelect.value));
 const keysEl = document.getElementById("keys");
 document.getElementById("tanya").addEventListener("click", () => {
   keysEl.hidden = !keysEl.hidden;
+});
+
+document.getElementById("tutupTanggapan").addEventListener("click", () => {
+  document.getElementById("tanggapan").hidden = true;
 });
 
 /* Tautan Instagram hanya muncul kalau TAUTAN_IG diisi di KONFIG di atas. */
@@ -1132,6 +1168,20 @@ function ubin(foto, idx, x, y, size, src, tepi, angkat){
 
 /* Semua papan digabung jadi satu berkas PNG — browser memblokir beberapa
    unduhan berurutan, jadi jangan disimpan satu per satu. */
+/* Ajakan tanggapan muncul sesudah berkas benar-benar tersimpan — bukan saat
+   puzzle selesai, karena saat itu pengguna masih menahan telapak tangan dan
+   pop-up justru akan mengganggu gesture yang sedang berjalan.
+   Sengaja TIDAK direset oleh tombol R: cukup sekali per sesi. */
+let tanggapanPernahMuncul = false;
+
+function tampilkanTanggapan(){
+  if (!TAUTAN_IG || tanggapanPernahMuncul) return;
+  tanggapanPernahMuncul = true;
+  const kotak = document.getElementById("tanggapan");
+  document.getElementById("tautanTanggapan").href = TAUTAN_IG;
+  kotak.hidden = false;
+}
+
 function save(){
   if (!papan.length) return;
   const sisi = K.PX_PAPAN, sela = 24, k = papan.length;
@@ -1150,10 +1200,11 @@ function save(){
   });
 
   const a = document.createElement("a");
-  a.download = `bidik-${Date.now()}.png`;
+  a.download = `kepingin-${Date.now()}.png`;
   a.href = out.toDataURL("image/png");
   a.click();
   savedFlash = 1;
+  setTimeout(tampilkanTanggapan, 1200);   // beri jeda, biar kilat simpan lewat dulu
 }
 
 /* ══ HUD, pemandu, titik tangan, kontrol cadangan ════════ */
