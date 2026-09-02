@@ -16,6 +16,7 @@
     --emulsion:#F2EFE6;     /* teks utama */
     --grain:#6C7686;        /* teks sekunder */
     --fix:#39D98A;          /* benar / selesai */
+    --panel:rgba(18,22,31,.92);   /* latar kotak melayang: pemandu, lampu, tombol ? */
   }
   /* Tema cerah. Nilainya dipilih agar kontras teks tetap aman di layar terang,
      bukan sekadar membalik hitam-putih. */
@@ -27,11 +28,11 @@
     --emulsion:#151A24;
     --grain:#5F6672;
     --fix:#0F8F5B;
+    --panel:rgba(255,255,255,.94);
   }
   body.cerah #status{background:linear-gradient(180deg,rgba(244,241,234,.85),transparent)}
   body.cerah #keys{background:linear-gradient(0deg,rgba(244,241,234,.94),transparent)}
   body.cerah #coach{box-shadow:0 8px 30px rgba(60,50,30,.16)}
-  body.cerah .lampu{background:rgba(255,255,255,.85)}
   body.cerah select{background:#FFFFFF}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:var(--ink);color:var(--emulsion);
@@ -58,7 +59,7 @@
      belum cukup rapat. */
   #sensor{display:flex;gap:8px;align-items:center;white-space:nowrap}
   .lampu{display:flex;gap:6px;align-items:center;color:var(--grain);
-    background:rgba(18,22,31,.72);border:1px solid var(--garis);
+    background:var(--panel);border:1px solid var(--garis);
     border-radius:99px;padding:5px 11px 5px 8px}
   .lampu i{width:7px;height:7px;border-radius:50%;background:var(--garis);
     display:block;transition:background .18s}
@@ -70,12 +71,13 @@
      Di bawah tengah, dekat arah pandang saat orang melihat tangannya sendiri. */
   #coach{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);
     display:flex;gap:14px;align-items:center;max-width:min(92vw,60ch);
-    background:rgba(18,22,31,.9);border:1px solid var(--garis);border-radius:14px;
+    background:var(--panel);border:1px solid var(--garis);border-radius:14px;
     padding:13px 20px 13px 15px;pointer-events:none;
-    box-shadow:0 10px 40px rgba(0,0,0,.5);
+    box-shadow:0 10px 40px rgba(0,0,0,.45);
     transition:opacity .25s,transform .25s}
   #coach.sembunyi{opacity:0;transform:translateX(-50%) translateY(10px)}
-  #coachIkon{flex:none;width:44px;height:44px;display:grid;place-items:center}
+  #coachIkon{flex:none;width:44px;height:44px;display:grid;place-items:center;
+    color:var(--safelight)}
   #coachIkon svg{width:44px;height:44px;display:block}
   #coachTeks{font-size:13px;line-height:1.6;color:var(--emulsion);letter-spacing:.02em}
   #coachTeks b{color:var(--safelight);font-weight:700}
@@ -91,7 +93,7 @@
   #keys kbd{color:var(--emulsion);border:1px solid var(--garis);border-radius:3px;
     padding:1px 6px;margin-right:6px}
   #tanya{position:fixed;right:16px;bottom:16px;width:30px;height:30px;
-    border-radius:50%;border:1px solid var(--garis);background:rgba(18,22,31,.85);
+    border-radius:50%;border:1px solid var(--garis);background:var(--panel);
     color:var(--grain);font:inherit;font-size:13px;cursor:pointer;z-index:5}
   #tanya:hover{color:var(--emulsion);border-color:var(--grain)}
 
@@ -134,7 +136,7 @@
   .baris{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
   .bidang{flex:1 1 13ch;min-width:13ch}
   .bidang label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-    color:#3E4757;margin-bottom:5px}
+    color:var(--grain);margin-bottom:5px}
   select{font:inherit;font-size:12px;width:100%;color:var(--emulsion);
     background:var(--ink);border:1px solid var(--garis);border-radius:6px;padding:9px 10px}
   select:focus-visible{outline:2px solid var(--safelight);outline-offset:1px}
@@ -143,7 +145,11 @@
     letter-spacing:.05em;text-decoration:none;padding:11px;border-radius:8px;
     border:1px solid var(--garis)}
   #tautanIG:hover{color:var(--safelight);border-color:var(--safelight)}
-  #gate small.nota{display:block;margin-top:18px;color:#3E4757;font-size:10px;line-height:1.7}
+  #gate small.nota{display:block;margin-top:18px;color:var(--grain);opacity:.75;
+    font-size:10px;line-height:1.7}
+  .kredit{margin-top:14px;color:var(--grain);opacity:.75;font-size:11px;letter-spacing:.05em}
+  .kredit a{color:var(--emulsion);text-decoration:none;border-bottom:1px solid var(--garis)}
+  .kredit a:hover{color:var(--safelight);border-color:var(--safelight)}
   .err{color:#E5387B}
 
   @media (max-width:520px){
@@ -226,6 +232,9 @@
   <a id="tautanIG" href="#" target="_blank" rel="noopener" style="display:none"></a>
   <small class="nota">Kamera diproses sepenuhnya di perangkat ini.
     Tidak ada video atau foto yang dikirim ke mana pun.</small>
+  <p class="kredit">Dibuat oleh
+    <a href="https://www.instagram.com/sarjan.eth/" target="_blank" rel="noopener">Muh. Sarjan</a>
+    dengan Claude AI</p>
 </div></div>
 
 <script type="module">
