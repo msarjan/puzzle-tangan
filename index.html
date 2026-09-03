@@ -253,12 +253,6 @@
           <option value="cerah">cerah</option>
           <option value="gelap">gelap</option>
         </select></div>
-      <div class="bidang"><label>Maks tangan</label>
-        <select id="handSelect">
-          <option value="2">2 tangan</option>
-          <option value="4">4 tangan</option>
-          <option value="6">6 tangan</option>
-        </select></div>
     </div>
   </details>
 
@@ -313,6 +307,22 @@ const K = {
   HITUNG_MUNDUR:   3,      // detik, jeda untuk menurunkan tangan sebelum jepret
   JEDA_JEPRET:     1400,   // ms menampilkan foto utuh sebelum pecah jadi keping
   MAKS_KOTAK:      3,      // lebih dari ini kepingnya terlalu kecil untuk dicubit
+
+  /* Jumlah tangan tidak pernah ditanyakan ke pengguna — diturunkan dari
+     jumlah kotak, karena itulah yang memang bisa dijawab orang sebelum mencoba.
+
+     Dua tahap punya kebutuhan berbeda:
+     - MEMBIDIK butuh tepat dua tangan per kotak. Lebih dari itu tidak menambah
+       kegunaan, malah memperbesar peluang tangan antar orang salah dipasangkan.
+     - MENYUSUN tidak punya pemasangan yang bisa salah — tiap tangan bekerja
+       sendiri — jadi makin banyak makin ramai. Di sinilah jumlahnya dinaikkan.
+
+     Pergantian model jatuh di jeda menampilkan foto utuh, jadi tidak terasa. */
+  TANGAN_SUSUN:    6,      // saat menyusun, berapa pun jumlah kotaknya
+  TANGAN_MIN:      2,      // di bawah ini membidik jadi mustahil (butuh dua tangan)
+  TANGAN_TURUN:    2,      // dikurangi sekian tiap kali perangkat kewalahan
+  FPS_MIN:         18,     // di bawah ini pelacakan mulai terasa tersendat
+  CEK_FPS_MS:      4000,   // panjang jendela pengukuran
 
   // menyimpan
   TAHAN_SIMPAN:    750,    // ms telapak terbuka harus ditahan
@@ -383,7 +393,6 @@ const gate = document.getElementById("gate"), gateText = document.getElementById
 const camSelect  = document.getElementById("camSelect");
 const modeSelect = document.getElementById("modeSelect");
 const gridSelect = document.getElementById("gridSelect");
-const handSelect = document.getElementById("handSelect");
 const temaSelect = document.getElementById("temaSelect");
 const tombolMulai = document.getElementById("start");
 const video = document.createElement("video");
@@ -508,6 +517,63 @@ function gambarLangkah(){
   ).join("");
 }
 
+/* ══ model deteksi ═══════════════════════════════════════ */
+const MODEL_TANGAN = "https://storage.googleapis.com/mediapipe-models/" +
+  "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+let tanganKini = 2;               // berapa tangan yang sedang dilacak model
+let tanganBatas = K.TANGAN_SUSUN; // langit-langit; diturunkan kalau perangkat berat
+let delegateKini = "GPU";
+let sedangGantiModel = false;
+
+/** Berapa tangan yang dibutuhkan tahap membidik: dua per kotak. */
+const tanganBidik = () =>
+  Math.min(tanganBatas, Math.max(K.TANGAN_MIN, jumlahKotak * 2));
+
+/** Berapa tangan yang pantas untuk tahap menyusun. */
+const tanganSusun = () => Math.min(tanganBatas, K.TANGAN_SUSUN);
+
+async function buatLandmarker(n, delegate){
+  const baru = await HandLandmarker.createFromOptions(berkasVisi, {
+    baseOptions:{ modelAssetPath:MODEL_TANGAN, delegate },
+    numHands: n,
+    runningMode:"VIDEO",
+    minHandDetectionConfidence:0.5, minTrackingConfidence:0.5
+  });
+  tanganKini = n; delegateKini = delegate;
+  return baru;
+}
+
+/* Mengganti jumlah tangan yang dilacak.
+   Model lama tetap dipakai sampai penggantinya siap, supaya tidak ada frame
+   yang kosong di tengah pergantian. Dipanggil tanpa ditunggu — pemanggilnya
+   tidak boleh terhenti karenanya. */
+async function gantiTangan(n, catatan){
+  n = Math.max(K.TANGAN_MIN, Math.min(tanganBatas, n));
+  if (sedangGantiModel || n === tanganKini || !landmarker) return;
+  sedangGantiModel = true;
+  try{
+    const lama = landmarker;
+    landmarker = await buatLandmarker(n, delegateKini);
+    lama.close();
+    if (catatan){ pesanSesaat = catatan; pesanSampai = performance.now() + 3200; }
+  }catch(e){
+    // gagal mengganti: model lama masih jalan, biarkan saja
+  }
+  sedangGantiModel = false;
+}
+
+/* Perangkat tidak sanggup mengikuti — turunkan langit-langitnya, lalu
+   sesuaikan model dan jumlah kotak supaya tidak ada target yang mustahil. */
+function turunkanTangan(){
+  if (tanganBatas <= K.TANGAN_MIN) return;
+  tanganBatas = Math.max(K.TANGAN_MIN, tanganBatas - K.TANGAN_TURUN);
+  jumlahKotak = Math.max(1, Math.min(jumlahKotak, Math.floor(tanganBatas / 2)));
+  const target = (state === S.AIM || state === S.COUNT) ? tanganBidik() : tanganSusun();
+  gantiTangan(target,
+    `Perangkat terasa berat — pelacakan diturunkan ke ${tanganBatas} tangan.`);
+}
+
 /* ══ boot ════════════════════════════════════════════════ */
 tombolMulai.addEventListener("click", boot);
 
@@ -543,6 +609,8 @@ async function boot(){
     pakaiTema(temaSelect.value);
     N           = parseInt(gridSelect.value, 10);
     jumlahKotak = Math.min(K.MAKS_KOTAK, parseInt(modeSelect.value, 10));
+    // tiap kotak butuh dua tangan; kalau nanti pelacakan turun, jumlah kotak
+    // ikut dibatasi supaya tidak ada target yang mustahil dicapai
 
     gateText.textContent = "Meminta izin kamera…";
     await startStream(camSelect.value || undefined);
@@ -559,26 +627,13 @@ async function boot(){
     berkasVisi = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
 
-    // Tiap kotak butuh dua tangan untuk membidik, jadi jumlah tangan minimum
-    // ditentukan oleh jumlah kotak. Pilihan pengguna hanya boleh menaikkan.
-    const jumlahTangan = Math.max(parseInt(handSelect.value, 10), jumlahKotak * 2);
-
-    const buatLandmarker = delegate => HandLandmarker.createFromOptions(berkasVisi, {
-      baseOptions:{
-        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-        delegate },
-      numHands: jumlahTangan,
-      runningMode:"VIDEO",
-      minHandDetectionConfidence:0.5, minTrackingConfidence:0.5
-    });
-
     // Sebagian perangkat menolak akses GPU dari browser. Tanpa cadangan CPU,
     // aplikasi gagal total di layar pembuka — tidak bisa diterima untuk rilis umum.
     try {
-      landmarker = await buatLandmarker("GPU");
+      landmarker = await buatLandmarker(tanganBidik(), "GPU");
     } catch(gpuGagal){
       gateText.textContent = "GPU tidak tersedia, memakai CPU…";
-      landmarker = await buatLandmarker("CPU");
+      landmarker = await buatLandmarker(tanganBidik(), "CPU");
     }
 
     gate.style.display = "none";
@@ -621,6 +676,7 @@ async function startStream(deviceId){
    dipanggil saat benar-benar ada frame kamera baru, sedangkan hitungan tahan
    memakai selisih waktu (ms) supaya sama di semua perangkat. */
 let waktuLalu = performance.now();
+let fpsHitung = 0, fpsMulai = performance.now();   // pengukur kecepatan deteksi
 
 function loop(){
   requestAnimationFrame(loop);
@@ -637,6 +693,17 @@ function loop(){
 
     // indikator deteksi: berapa terlihat, berapa yang cubitannya sudah cukup rapat
     setSensor(lastHands.length, lastHands.filter(L => cubitRasio(L) < K.BIDIK_ON).length);
+
+    /* Pengukuran kecepatan deteksi. Yang diukur frame KAMERA yang benar-benar
+       diproses, bukan frame gambar — itulah yang menentukan terasa tersendat
+       atau tidak. Kalau perangkat tidak sanggup, jumlah tangan diturunkan
+       sendiri; pengguna tidak perlu tahu apa itu numHands. */
+    fpsHitung++;
+    if (kini - fpsMulai >= K.CEK_FPS_MS){
+      const fps = fpsHitung / ((kini - fpsMulai) / 1000);
+      fpsHitung = 0; fpsMulai = kini;
+      if (fps < K.FPS_MIN && tanganBatas > K.TANGAN_MIN) turunkanTangan();
+    }
   }
   const hands = lastHands;
 
@@ -909,6 +976,12 @@ function capture(){
   savedFlash = 1; shotStart = performance.now();
   tahanSimpan = 0; saveArmed = true;
   state = S.SHOT;
+
+  /* Naikkan pelacakan untuk tahap menyusun — di sini makin banyak tangan makin
+     ramai, dan tidak ada pemasangan tangan yang bisa keliru. Tidak ditunggu:
+     pergantian model berlangsung selama jeda menampilkan foto utuh, dan model
+     lama tetap melayani sampai penggantinya siap. */
+  gantiTangan(tanganSusun());
 }
 
 /* Fisher–Yates: pengacakan merata.
@@ -1331,7 +1404,7 @@ function setSensor(jumlahTangan, jumlahCubit){
   if (kunci === sensorKini) return;
   sensorKini = kunci;
 
-  teksTangan.textContent = `${jumlahTangan} tangan`;
+  teksTangan.textContent = `${jumlahTangan}/${tanganKini} tangan`;
   lampuTangan.className = "lampu" + (jumlahTangan > 0 ? " on" : "");
 
   teksCubit.textContent = `${jumlahCubit} mencubit`;
@@ -1453,6 +1526,7 @@ addEventListener("keydown", e => {
     state = S.AIM; papan = []; penunjuk.clear();
     kotakHidup.clear(); kotakKunci = []; kotakMouse = null;
     tahanSimpan = 0; saveArmed = true; waktuSelesai = 0; denyut.length = 0;
+    gantiTangan(tanganBidik());     // kembali ke kebutuhan tahap membidik
   }
 });
 
