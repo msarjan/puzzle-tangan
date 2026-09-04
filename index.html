@@ -185,6 +185,42 @@
     .langkah > div{display:flex;gap:12px;align-items:center;padding:11px}
     .langkah svg{margin-bottom:0;flex:none}
   }
+
+  /* ══ HP tegak (portrait) ══
+     Video kamera selalu landscape (16:9), jadi di layar tegak yang sempit,
+     kanvas dibatasi lebar dan menyisakan ruang kosong besar di atas-bawah.
+     Di situlah HUD, coach panel, dan daftar tombol numpuk kalau tidak
+     disesuaikan. Semua aturan di sini hanya MENAMBAH nilai baru untuk
+     kondisi ini — tidak ada aturan lama di atas yang diubah, jadi
+     laptop/desktop/tablet landscape sama sekali tidak terpengaruh. */
+  @media (max-width:520px) and (orientation:portrait){
+    /* beri kanvas ruang vertikal sebanyak mungkin */
+    #stage{padding:0}
+
+    /* HUD atas: dua kolom bisa berdesakan di layar ~360-390px lebar */
+    #status{padding:10px 12px;gap:8px;font-size:10.5px}
+    .lampu{padding:4px 9px 4px 7px;gap:5px}
+
+    /* pemandu bawah: turunkan ukuran supaya tidak menabrak #keys atau
+       kepotong tepi layar saat kanvas menyisakan sedikit ruang */
+    #coach{bottom:14px;max-width:94vw;gap:10px;padding:10px 14px 10px 11px;
+      border-radius:12px}
+    #coachIkon{width:34px;height:34px}
+    #coachIkon svg{width:34px;height:34px}
+    #coachTeks{font-size:11.5px}
+    #coachTeks small{font-size:10px}
+
+    /* daftar pintasan keyboard: kolom sempit, biarkan wrap dua baris */
+    #keys{padding:8px 10px 10px;gap:8px 12px;font-size:9.5px}
+
+    /* kotak ajakan tanggapan: lebar penuh dikurangi margin, bukan pojok
+       sempit. Ditaruh dekat HUD atas, BUKAN di bawah — #coach tetap
+       tampil bersamaan (tanggapan muncul 1,2 detik setelah simpan, saat
+       status masih "tersimpan"), jadi menaruh keduanya di bawah akan
+       membuatnya bertumpuk. */
+    #tanggapan{left:12px;right:12px;top:56px;width:auto}
+  }
+
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
