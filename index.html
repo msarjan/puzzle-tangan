@@ -201,17 +201,24 @@
     #status{padding:10px 12px;gap:8px;font-size:10.5px}
     .lampu{padding:4px 9px 4px 7px;gap:5px}
 
-    /* pemandu bawah: turunkan ukuran supaya tidak menabrak #keys atau
-       kepotong tepi layar saat kanvas menyisakan sedikit ruang */
-    #coach{bottom:14px;max-width:94vw;gap:10px;padding:10px 14px 10px 11px;
+    /* pemandu bawah: turunkan ukuran, dan sekarang jadi satu-satunya
+       elemen di area bawah karena #keys disembunyikan (lihat di bawah) */
+    #coach{bottom:16px;max-width:94vw;gap:10px;padding:10px 14px 10px 11px;
       border-radius:12px}
     #coachIkon{width:34px;height:34px}
     #coachIkon svg{width:34px;height:34px}
     #coachTeks{font-size:11.5px}
     #coachTeks small{font-size:10px}
 
-    /* daftar pintasan keyboard: kolom sempit, biarkan wrap dua baris */
-    #keys{padding:8px 10px 10px;gap:8px 12px;font-size:9.5px}
+    /* daftar pintasan KEYBOARD tidak relevan di HP — tidak ada keyboard
+       fisik untuk menekan C, X, T, S, R, D, L. Disembunyikan total,
+       bukan sekadar dikecilkan, supaya tidak menampilkan tombol yang
+       tidak bisa dipakai dan supaya #coach dapat ruang bawah sepenuhnya. */
+    #keys{display:none}
+    /* tombol "?" jadi tidak berguna kalau isinya (#keys) tidak pernah
+       tampil — sembunyikan juga, daripada ada tombol yang tidak
+       melakukan apa pun yang terlihat */
+    #tanya{display:none}
 
     /* kotak ajakan tanggapan: lebar penuh dikurangi margin, bukan pojok
        sempit. Ditaruh dekat HUD atas, BUKAN di bawah — #coach tetap
@@ -221,10 +228,48 @@
     #tanggapan{left:12px;right:12px;top:56px;width:auto}
   }
 
+  /* ══ Kunci portrait di HP ══
+     Layar HP dalam mode landscape terlalu pendek untuk menampung kanvas +
+     HUD + coach dengan layak (sudah dicoba, hasilnya berantakan). Daripada
+     memaksa CSS menyesuaikan kondisi yang sempit sekali, tampilkan pesan
+     yang jujur: minta pengguna memutar kembali ke tegak.
+     Height dijadikan syarat (bukan cuma width) supaya tablet landscape
+     yang memang lebih lega tidak ikut terkena — ambang 480px tinggi kira-kira
+     memisahkan "HP dimiringkan" dari "tablet/laptop kecil". */
+  #putarHp{display:none}
+  @media (orientation:landscape) and (max-height:480px){
+    #putarHp{
+      display:flex; position:fixed; inset:0; z-index:20;
+      background:var(--ink); color:var(--emulsion);
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:16px; padding:28px; text-align:center;
+      font-family:"JetBrains Mono",ui-monospace,monospace;
+    }
+    #putarHp svg{width:52px;height:52px;color:var(--safelight)}
+    #putarHp p{font-size:13px;line-height:1.7;max-width:32ch;color:var(--grain)}
+    #putarHp b{color:var(--emulsion)}
+    /* Sembunyikan aplikasi di baliknya supaya kamera tidak terasa jalan
+       sia-sia dan tidak ada gesture yang salah terdeteksi saat pengguna
+       memutar layarnya. */
+    #stage,#status,#coach,#keys,#tanya,#tanggapan,#gate{display:none!important}
+  }
+
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+
+<div id="putarHp">
+  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+    stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="6" width="20" height="36" rx="3"/>
+    <path d="M24 34h.01"/>
+    <path d="M38 14a9 9 0 0 1 0 12" stroke-dasharray="2 4"/>
+  </svg>
+  <p><b>Putar layar ke posisi tegak.</b><br>
+    Kepingin dirancang untuk tampilan portrait supaya kamera dan tombolnya
+    muat dengan nyaman.</p>
+</div>
 
 <div id="stage"><canvas id="cv"></canvas></div>
 
