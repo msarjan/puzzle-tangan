@@ -783,6 +783,7 @@ function loop(){
     if (kini - fpsMulai >= K.CEK_FPS_MS){
       const fps = fpsHitung / ((kini - fpsMulai) / 1000);
       fpsHitung = 0; fpsMulai = kini;
+      console.log("[diagnosa] fps terukur:", fps.toFixed(1), "| tanganBatas:", tanganBatas, "| jumlahKotak:", jumlahKotak);
       if (fps < K.FPS_MIN && tanganBatas > K.TANGAN_MIN) turunkanTangan();
     }
   }
