@@ -404,6 +404,9 @@ const K = {
   TANGAN_TURUN:    2,      // dikurangi sekian tiap kali perangkat kewalahan
   FPS_MIN:         18,     // di bawah ini pelacakan mulai terasa tersendat
   CEK_FPS_MS:      4000,   // panjang jendela pengukuran
+  PEMANASAN_MS:    5000,   // ms sejak model siap sebelum boleh menurunkan tangan —
+                           //   frame pertama wajar lambat saat model baru dimuat,
+                           //   tanpa ini device kuat bisa salah didiagnosis lemah
 
   // menyimpan
   TAHAN_SIMPAN:    750,    // ms telapak terbuka harus ditahan
@@ -719,6 +722,12 @@ async function boot(){
 
     gate.style.display = "none";
     state = S.AIM;
+    // Pengukuran fps dimulai DI SINI, bukan sejak script dimuat — beberapa
+    // frame pertama setelah model baru siap wajar lebih lambat (belum
+    // "panas"), dan tanpa reset ini jendela pengukuran pertama bisa salah
+    // menyimpulkan device lemah padahal cuma baru saja selesai boot.
+    fpsMulai = performance.now(); fpsHitung = 0;
+    waktuModelSiap = fpsMulai;
     requestAnimationFrame(loop);
   }catch(e){
     tombolMulai.disabled = false;
@@ -758,6 +767,8 @@ async function startStream(deviceId){
    memakai selisih waktu (ms) supaya sama di semua perangkat. */
 let waktuLalu = performance.now();
 let fpsHitung = 0, fpsMulai = performance.now();   // pengukur kecepatan deteksi
+let waktuModelSiap = 0;    // diisi saat boot selesai — pemicu turunkanTangan()
+                            // ditahan sampai PEMANASAN_MS lewat dari titik ini
 
 function loop(){
   requestAnimationFrame(loop);
@@ -783,8 +794,8 @@ function loop(){
     if (kini - fpsMulai >= K.CEK_FPS_MS){
       const fps = fpsHitung / ((kini - fpsMulai) / 1000);
       fpsHitung = 0; fpsMulai = kini;
-      console.log("[diagnosa] fps terukur:", fps.toFixed(1), "| tanganBatas:", tanganBatas, "| jumlahKotak:", jumlahKotak);
-      if (fps < K.FPS_MIN && tanganBatas > K.TANGAN_MIN) turunkanTangan();
+      const sudahPanas = (kini - waktuModelSiap) >= K.PEMANASAN_MS;
+      if (sudahPanas && fps < K.FPS_MIN && tanganBatas > K.TANGAN_MIN) turunkanTangan();
     }
   }
   const hands = lastHands;
