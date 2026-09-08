@@ -8,6 +8,7 @@
   Puzzle dari kameramu yang dimainkan dengan gerakan tangan. Berjalan penuh
   di perangkatmu, tanpa mengirim data ke mana pun.">
 <meta name="theme-color" content="#F4F1EA">
+<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -504,7 +505,7 @@ let tahanSimpan = 0, saveArmed = true, savedFlash = 0;   // tahanSimpan dalam ms
 let pesanSesaat = "", pesanSampai = 0;                   // pesan singkat di pemandu
 let waktuSelesai = 0;      // penanda animasi perayaan saat puzzle selesai
 
-/* ══ util geometri ═══════════════════════════════════════ */
+/* ══ util geometri ══════════════��════════════════════════ */
 const d = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 const handSize = L => d(L[0], L[9]) || 1e-6;
 const ext = (L,tip,pip) => d(L[tip],L[0]) > d(L[pip],L[0]) * 1.02;
